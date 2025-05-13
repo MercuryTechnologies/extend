@@ -21,8 +21,7 @@ import Prelude
 
 -- | CLI command options
 data Command
-  = GetWorkflow Text
-  | RunWorkflow Text [Text] Bool (Maybe Text) (Maybe Text) -- workflowId, fileUrls, isLocalFile flag, optional file name, optional version
+  = RunWorkflow Text [Text] Bool (Maybe Text) (Maybe Text) -- workflowId, fileUrls, isLocalFile flag, optional file name, optional version
   | ListWorkflowRuns (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int)
   | GetWorkflowRun Text
   deriving (Show)
@@ -33,12 +32,6 @@ commandParser =
   subparser $
     mconcat
       [ command
-          "get-workflow"
-          ( info
-              (GetWorkflow <$> workflowIdArg)
-              (progDesc "Get a specific workflow by ID")
-          ),
-        command
           "run-workflow"
           ( info
               ( RunWorkflow
@@ -153,9 +146,6 @@ main = do
 -- | Run the appropriate command
 runCommand :: ApiToken -> ApiVersion -> Client.ClientEnv -> Command -> IO (Either Client.ClientError ())
 runCommand token version env = \case
-  GetWorkflow workflowId -> do
-    putStrLn $ "Getting workflow: " ++ unpack workflowId
-    Client.runClientM (getWorkflowCmd token version workflowId) env
   RunWorkflow workflowId filePaths isLocal maybeFileName maybeVersion -> do
     putStrLn $ "Running workflow: " ++ unpack workflowId
     when (isJust maybeVersion) $
@@ -232,23 +222,6 @@ runCommand token version env = \case
   GetWorkflowRun runId -> do
     putStrLn $ "Getting workflow run: " ++ unpack runId
     Client.runClientM (getWorkflowRunCmd token version runId) env
-
--- | Command to get a specific workflow
-getWorkflowCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()
-getWorkflowCmd token version workflowId = do
-  response <- getWorkflow token version workflowId
-  let Workflows.GetWorkflowResponse
-        { Workflows.getWorkflowResponseSuccess = success,
-          Workflows.getWorkflowResponseWorkflow = workflow
-        } = response
-  liftIO $ do
-    putStrLn $ "Success: " ++ show success
-    putStrLn $ "Workflow ID: " ++ unpack (Workflows.workflowId workflow)
-    putStrLn $ "Name: " ++ unpack (Workflows.workflowName workflow)
-    putStrLn $ "Version: " ++ unpack (Workflows.workflowVersion workflow)
-    putStrLn $ "Created at: " ++ show (Workflows.workflowCreatedAt workflow)
-    putStrLn $ "Updated at: " ++ show (Workflows.workflowUpdatedAt workflow)
-    putStrLn $ "Description: " ++ maybe "(none)" unpack (Workflows.workflowDescription workflow)
 
 -- | Command to run a workflow
 runWorkflowCmd :: ApiToken -> ApiVersion -> Workflows.RunWorkflowRequest -> Client.ClientM ()
