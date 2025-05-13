@@ -6,7 +6,7 @@ module Main (main) where
 
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
-import Data.Maybe (isJust)
+import Data.Maybe (Maybe (..), isJust)
 import Data.Text (Text, pack, unpack)
 import Extend.V1
 import qualified Extend.V1.Workflows as Workflows
@@ -17,11 +17,12 @@ import qualified Servant.Client as Client
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
 import System.IO (hPrint, hPutStrLn, stderr)
+import Prelude
 
 -- | CLI command options
 data Command
   = GetWorkflow Text
-  | RunWorkflow Text [FilePath]
+  | RunWorkflow Text [Text] Bool (Maybe Text) (Maybe Text) -- workflowId, fileUrls, isLocalFile flag, optional file name, optional version
   | ListWorkflowRuns (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int)
   | GetWorkflowRun Text
   deriving (Show)
@@ -42,9 +43,12 @@ commandParser =
           ( info
               ( RunWorkflow
                   <$> workflowIdArg
-                  <*> many (strArgument (metavar "FILE" <> help "File path to process"))
+                  <*> many (strArgument (metavar "FILE" <> help "File URL or path to process"))
+                  <*> switch (long "local" <> help "Treat files as local file paths instead of URLs")
+                  <*> optional (strOption (long "filename" <> metavar "NAME" <> help "Name to use for the file(s)"))
+                  <*> optional (strOption (long "version" <> metavar "VERSION" <> help "Workflow version to run (e.g., '3' or 'draft')"))
               )
-              (progDesc "Run a workflow with specified files")
+              (progDesc "Run a workflow with specified files (default: URLs)")
           ),
         command
           "list-runs"
@@ -152,19 +156,42 @@ runCommand token version env = \case
   GetWorkflow workflowId -> do
     putStrLn $ "Getting workflow: " ++ unpack workflowId
     Client.runClientM (getWorkflowCmd token version workflowId) env
-  RunWorkflow workflowId filePaths -> do
+  RunWorkflow workflowId filePaths isLocal maybeFileName maybeVersion -> do
     putStrLn $ "Running workflow: " ++ unpack workflowId
+    when (isJust maybeVersion) $
+      putStrLn $
+        "Version: " ++ maybe "latest" unpack maybeVersion
     putStrLn $ "Files: " ++ show filePaths
+    when (isJust maybeFileName) $
+      putStrLn $
+        "Using filename: " ++ maybe "" unpack maybeFileName
     when (null filePaths) $
       putStrLn "Warning: No files specified. This will create an empty workflow run."
-    -- TODO: Implement file handling
+
+    -- Create file objects for the request
+    let files =
+          map
+            ( \f ->
+                if isLocal
+                  then Prelude.error "Local file processing not implemented yet"
+                  else
+                    Workflows.ExtendFile
+                      { Workflows.extendFileFileName = maybeFileName,
+                        Workflows.extendFileFileUrl = Just f,
+                        Workflows.extendFileFileId = Nothing,
+                        Workflows.extendFileOutputs = Nothing
+                      }
+            )
+            filePaths
+
     let request =
           Workflows.RunWorkflowRequest
             { Workflows.runWorkflowRequestWorkflowId = workflowId,
-              Workflows.runWorkflowRequestFiles = Nothing, -- Would need to prepare files
+              Workflows.runWorkflowRequestFiles = if null files then Nothing else Just files,
               Workflows.runWorkflowRequestRawTexts = Nothing,
               Workflows.runWorkflowRequestPriority = Nothing,
-              Workflows.runWorkflowRequestMetadata = Nothing
+              Workflows.runWorkflowRequestMetadata = Nothing,
+              Workflows.runWorkflowRequestVersion = maybeVersion
             }
     Client.runClientM (runWorkflowCmd token version request) env
   ListWorkflowRuns maybeWorkflowId maybeStatus maybeFileNameContains maybeSortBy maybeSortDir maybeNextPageToken maybeLimit -> do
@@ -173,25 +200,33 @@ runCommand token version env = \case
     -- Show filter information if present
     when (isJust maybeWorkflowId) $
       putStrLn $
-        "Filtered by workflow ID: " ++ maybe "" unpack maybeWorkflowId
+        "Filtered by workflow ID: "
+          ++ maybe "" unpack maybeWorkflowId
     when (isJust maybeStatus) $
       putStrLn $
-        "Filtered by status: " ++ maybe "" unpack maybeStatus
+        "Filtered by status: "
+          ++ maybe "" unpack maybeStatus
     when (isJust maybeFileNameContains) $
       putStrLn $
-        "Filtered by filename containing: " ++ maybe "" unpack maybeFileNameContains
+        "Filtered by filename containing: "
+          ++ maybe "" unpack maybeFileNameContains
     when (isJust maybeSortBy) $
       putStrLn $
-        "Sorted by: " ++ maybe "" unpack maybeSortBy
+        "Sorted by: "
+          ++ maybe "" unpack maybeSortBy
     when (isJust maybeSortDir) $
       putStrLn $
-        "Sort direction: " ++ maybe "" unpack maybeSortDir
+        "Sort direction: "
+          ++ maybe "" unpack maybeSortDir
     when (isJust maybeNextPageToken) $
       putStrLn $
-        "Using page token: " ++ maybe "" unpack maybeNextPageToken
+        "Using page token: "
+          ++ maybe "" unpack maybeNextPageToken
     when (isJust maybeLimit) $
       putStrLn $
-        "Limited to: " ++ maybe "" show maybeLimit ++ " results"
+        "Limited to: "
+          ++ maybe "" show maybeLimit
+          ++ " results"
 
     Client.runClientM (listWorkflowRunsCmd token version maybeWorkflowId maybeStatus maybeFileNameContains maybeSortBy maybeSortDir maybeNextPageToken maybeLimit) env
   GetWorkflowRun runId -> do
@@ -226,7 +261,20 @@ runWorkflowCmd token version request = do
   liftIO $ do
     putStrLn $ "Success: " ++ show success
     putStrLn $ "Created " ++ show (length workflowRuns) ++ " workflow runs:"
-    mapM_ (\run -> putStrLn $ "  - " ++ unpack (Workflows.workflowRunId run)) workflowRuns
+    mapM_
+      ( \run -> do
+          putStrLn $ "  - Run ID: " ++ unpack (Workflows.createdWorkflowRunId run)
+          putStrLn $ "    Status: " ++ show (Workflows.createdWorkflowRunStatus run)
+          case Workflows.createdWorkflowRunUrl run of
+            Just url -> putStrLn $ "    URL: " ++ unpack url
+            Nothing -> pure ()
+          case Workflows.createdWorkflowRunWorkflow run of
+            Just workflow -> do
+              putStrLn $ "    Workflow: " ++ unpack (Workflows.createdWorkflowName workflow)
+              putStrLn $ "    Version: " ++ unpack (Workflows.createdWorkflowVersion workflow)
+            Nothing -> pure ()
+      )
+      workflowRuns
 
 -- | Command to list workflow runs
 listWorkflowRunsCmd :: ApiToken -> ApiVersion -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Int -> Client.ClientM ()
@@ -243,7 +291,8 @@ listWorkflowRunsCmd token version maybeWorkflowId maybeStatus maybeFileNameConta
     mapM_ printWorkflowRun workflowRuns
     when (isJust nextPageToken) $
       putStrLn $
-        "Next page token: " ++ maybe "" unpack nextPageToken
+        "Next page token: "
+          ++ maybe "" unpack nextPageToken
 
 -- | Command to get a specific workflow run
 getWorkflowRunCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()

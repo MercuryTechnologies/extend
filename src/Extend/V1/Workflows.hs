@@ -7,11 +7,13 @@
 module Extend.V1.Workflows
   ( -- * Types
     Workflow (..),
+    CreatedWorkflow (..),
     WorkflowStep (..),
     WorkflowStepRun (..),
     ValidationRule (..),
     StepRunOutput (..),
     WorkflowRun (..),
+    CreatedWorkflowRun (..),
     WorkflowRunStatus (..),
     ExtendFile (..),
     PredeterminedOutput (..),
@@ -477,7 +479,9 @@ data RunWorkflowRequest = RunWorkflowRequest
     runWorkflowRequestPriority :: Maybe Int,
     -- | Optional metadata object that can be assigned to a specific WorkflowRun to help identify it.
     -- It will be returned in the response and webhooks. You can place any arbitrary key : value pairs in this object.
-    runWorkflowRequestMetadata :: Maybe (Map Text Value)
+    runWorkflowRequestMetadata :: Maybe (Map Text Value),
+    -- | Optional version of the workflow to run
+    runWorkflowRequestVersion :: Maybe Text
   }
   deriving stock (Show, Eq, Generic)
 
@@ -489,7 +493,8 @@ instance ToJSON RunWorkflowRequest where
           ("files" .=) <$> runWorkflowRequestFiles,
           ("rawTexts" .=) <$> runWorkflowRequestRawTexts,
           ("priority" .=) <$> runWorkflowRequestPriority,
-          ("metadata" .=) <$> runWorkflowRequestMetadata
+          ("metadata" .=) <$> runWorkflowRequestMetadata,
+          ("version" .=) <$> runWorkflowRequestVersion
         ]
 
 instance FromJSON RunWorkflowRequest where
@@ -499,13 +504,15 @@ instance FromJSON RunWorkflowRequest where
     rawTexts <- v Aeson..:? "rawTexts"
     priority <- v Aeson..:? "priority"
     metadata <- v Aeson..:? "metadata"
+    version <- v Aeson..:? "version"
     pure
       RunWorkflowRequest
         { runWorkflowRequestWorkflowId = workflowId,
           runWorkflowRequestFiles = files,
           runWorkflowRequestRawTexts = rawTexts,
           runWorkflowRequestPriority = priority,
-          runWorkflowRequestMetadata = metadata
+          runWorkflowRequestMetadata = metadata,
+          runWorkflowRequestVersion = version
         }
 
 -- | Response from getting a workflow
@@ -561,12 +568,130 @@ instance ToJSON ListWorkflowsResponse where
           ("pagination" .=) <$> listWorkflowsResponsePagination
         ]
 
+-- | A simplified workflow returned in the run workflow response
+data CreatedWorkflow = CreatedWorkflow
+  { -- | Type of the object
+    createdWorkflowObject :: ObjectType,
+    -- | ID of the workflow
+    createdWorkflowId :: Text,
+    -- | Version of the workflow
+    createdWorkflowVersion :: Text,
+    -- | Name of the workflow
+    createdWorkflowName :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON CreatedWorkflow where
+  parseJSON = Aeson.withObject "CreatedWorkflow" $ \v -> do
+    objectType <- v Aeson..: "object"
+    id <- v Aeson..: "id"
+    version <- v Aeson..: "version"
+    name <- v Aeson..: "name"
+    pure
+      CreatedWorkflow
+        { createdWorkflowObject = objectType,
+          createdWorkflowId = id,
+          createdWorkflowVersion = version,
+          createdWorkflowName = name
+        }
+
+instance ToJSON CreatedWorkflow where
+  toJSON CreatedWorkflow {..} =
+    Aeson.object
+      [ "object" .= createdWorkflowObject,
+        "id" .= createdWorkflowId,
+        "version" .= createdWorkflowVersion,
+        "name" .= createdWorkflowName
+      ]
+
+-- | A workflow run returned from the run workflow creation API
+data CreatedWorkflowRun = CreatedWorkflowRun
+  { -- | Type of the object
+    createdWorkflowRunObject :: ObjectType,
+    -- | ID of the workflow run
+    createdWorkflowRunId :: Text,
+    -- | Name of the workflow run
+    createdWorkflowRunName :: Maybe Text,
+    -- | Dashboard URL for the workflow run
+    createdWorkflowRunUrl :: Maybe Text,
+    -- | Status of the workflow run
+    createdWorkflowRunStatus :: WorkflowRunStatus,
+    -- | Metadata for the workflow run
+    createdWorkflowRunMetadata :: Maybe (Map Text Value),
+    -- | Files associated with the workflow run
+    createdWorkflowRunFiles :: Maybe [File],
+    -- | When the workflow run was initially created
+    createdWorkflowRunInitialRunAt :: Maybe UTCTime,
+    -- | Whether the workflow run has been reviewed
+    createdWorkflowRunReviewed :: Bool,
+    -- | Processor output results
+    createdWorkflowRunOutputs :: Maybe [ProcessorRun],
+    -- | Workflow step runs
+    createdWorkflowRunStepRuns :: Maybe [WorkflowStepRun],
+    -- | The associated workflow
+    createdWorkflowRunWorkflow :: Maybe CreatedWorkflow,
+    -- | The batch ID if part of a batch
+    createdWorkflowRunBatchId :: Maybe Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON CreatedWorkflowRun where
+  parseJSON = Aeson.withObject "CreatedWorkflowRun" $ \v -> do
+    objectType <- v Aeson..: "object"
+    id <- v Aeson..: "id"
+    name <- v Aeson..:? "name"
+    url <- v Aeson..:? "url"
+    status <- v Aeson..: "status"
+    metadata <- v Aeson..:? "metadata"
+    files <- v Aeson..:? "files"
+    initialRunAt <- v Aeson..:? "initialRunAt"
+    reviewed <- v Aeson..: "reviewed"
+    outputs <- v Aeson..:? "outputs"
+    stepRuns <- v Aeson..:? "stepRuns"
+    workflow <- v Aeson..:? "workflow"
+    batchId <- v Aeson..:? "batchId"
+    pure
+      CreatedWorkflowRun
+        { createdWorkflowRunObject = objectType,
+          createdWorkflowRunId = id,
+          createdWorkflowRunName = name,
+          createdWorkflowRunUrl = url,
+          createdWorkflowRunStatus = status,
+          createdWorkflowRunMetadata = metadata,
+          createdWorkflowRunFiles = files,
+          createdWorkflowRunInitialRunAt = initialRunAt,
+          createdWorkflowRunReviewed = reviewed,
+          createdWorkflowRunOutputs = outputs,
+          createdWorkflowRunStepRuns = stepRuns,
+          createdWorkflowRunWorkflow = workflow,
+          createdWorkflowRunBatchId = batchId
+        }
+
+instance ToJSON CreatedWorkflowRun where
+  toJSON CreatedWorkflowRun {..} =
+    Aeson.object $
+      catMaybes
+        [ Just ("object" .= createdWorkflowRunObject),
+          Just ("id" .= createdWorkflowRunId),
+          ("name" .=) <$> createdWorkflowRunName,
+          ("url" .=) <$> createdWorkflowRunUrl,
+          Just ("status" .= createdWorkflowRunStatus),
+          ("metadata" .=) <$> createdWorkflowRunMetadata,
+          ("files" .=) <$> createdWorkflowRunFiles,
+          ("initialRunAt" .=) <$> createdWorkflowRunInitialRunAt,
+          Just ("reviewed" .= createdWorkflowRunReviewed),
+          ("outputs" .=) <$> createdWorkflowRunOutputs,
+          ("stepRuns" .=) <$> createdWorkflowRunStepRuns,
+          ("workflow" .=) <$> createdWorkflowRunWorkflow,
+          ("batchId" .=) <$> createdWorkflowRunBatchId
+        ]
+
 -- | Response from running a workflow
 data RunWorkflowResponse = RunWorkflowResponse
   { -- | Whether the request was successful
     runWorkflowResponseSuccess :: Bool,
     -- | The workflow runs that were created
-    runWorkflowResponseWorkflowRuns :: [WorkflowRun]
+    runWorkflowResponseWorkflowRuns :: [CreatedWorkflowRun]
   }
   deriving stock (Show, Eq, Generic)
 
