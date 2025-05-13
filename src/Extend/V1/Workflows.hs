@@ -672,8 +672,12 @@ type WorkflowsAPI =
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
     :> QueryParam "workflowId" Text
-    :> QueryParam "limit" Int
-    :> QueryParam "page" Int
+    :> QueryParam "status" Text
+    :> QueryParam "fileNameContains" Text
+    :> QueryParam "sortBy" Text
+    :> QueryParam "sortDir" Text
+    :> QueryParam "nextPageToken" Text
+    :> QueryParam "maxPageSize" Int
     :> Get '[JSON] ListWorkflowRunsResponse
 
 -- | Split the client functions for easier access
@@ -684,7 +688,7 @@ getWorkflowClient :: Text -> Text -> Text -> ClientM GetWorkflowResponse
 listWorkflowsClient :: Text -> Text -> Maybe Int -> Maybe Int -> ClientM ListWorkflowsResponse
 runWorkflowClient :: Text -> Text -> RunWorkflowRequest -> ClientM RunWorkflowResponse
 getWorkflowRunClient :: Text -> Text -> Text -> ClientM GetWorkflowRunResponse
-listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Int -> Maybe Int -> ClientM ListWorkflowRunsResponse
+listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Int -> ClientM ListWorkflowRunsResponse
 getWorkflowClient :<|> listWorkflowsClient :<|> runWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
 
 -- | Get a workflow
@@ -732,9 +736,17 @@ listWorkflowRuns ::
   ApiVersion ->
   -- | Workflow ID
   Maybe Text ->
-  -- | Limit
-  Maybe Int ->
-  -- | Page
+  -- | Status (PENDING, PROCESSING, NEEDS_REVIEW, REJECTED, PROCESSED, FAILED)
+  Maybe Text ->
+  -- | Filter by file name containing this string
+  Maybe Text ->
+  -- | Sort by field (updatedAt, createdAt)
+  Maybe Text ->
+  -- | Sort direction (asc, desc)
+  Maybe Text ->
+  -- | Next page token
+  Maybe Text ->
+  -- | Maximum page size (1-1000, default 10)
   Maybe Int ->
   ClientM ListWorkflowRunsResponse
 listWorkflowRuns (ApiToken token) (ApiVersion version) = listWorkflowRunsClient ("Bearer " <> token) version

@@ -84,4 +84,6 @@ executable extend-example
                     , servant-client
                     , http-client
                     , http-client-tls
+                    , optparse-applicative
+                    , bytestring
     ghc-options:      -Wall 
