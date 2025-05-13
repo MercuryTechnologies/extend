@@ -41,20 +41,19 @@ main = do
     Left err -> do
       putStrLn "Error listing workflow runs:"
       print err
-    Right (SuccessResponse success response) -> do
-      -- Pattern match directly to avoid ambiguity
-      let runs = case response of
-            Workflows.ListWorkflowRunsResponse _ workflowRuns _ -> workflowRuns
-
-      putStrLn $ "Success: " ++ show success
-      putStrLn $ "Found " ++ show (length runs) ++ " workflow runs"
+    Right (Workflows.ListWorkflowRunsResponse _ workflowRuns _) -> do
+      putStrLn $ "Found " ++ show (length workflowRuns) ++ " workflow runs"
       mapM_
-        ( \run ->
+        ( \run -> do
             let runId = case run of
-                  Workflows.WorkflowRun _ id _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ -> id
-             in putStrLn $ "  - Workflow run: " ++ unpack runId
+                  Workflows.WorkflowRun _ id status workflowId workflowName _ createdAt _ _ _ _ _ _ _ _ _ -> id
+            putStrLn $ "  - Workflow run: " ++ unpack runId
+            putStrLn $ "    Status: " ++ show (case run of Workflows.WorkflowRun _ _ status _ _ _ _ _ _ _ _ _ _ _ _ _ -> status)
+            putStrLn $ "    Workflow: " ++ unpack (case run of Workflows.WorkflowRun _ _ _ _ workflowName _ _ _ _ _ _ _ _ _ _ _ -> workflowName)
+            putStrLn $ "    Created at: " ++ show (case run of Workflows.WorkflowRun _ _ _ _ _ _ createdAt _ _ _ _ _ _ _ _ _ -> createdAt)
+            putStrLn ""
         )
-        runs
+        workflowRuns
 
   -- Example: Run a workflow (if needed)
   -- Uncomment and modify this section to run a workflow

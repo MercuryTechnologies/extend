@@ -255,96 +255,80 @@ instance ToJSON WorkflowRunStatus where
 -- | A workflow run
 data WorkflowRun = WorkflowRun
   { -- | Type of the object
-    object :: ObjectType,
+    object :: Maybe ObjectType,
     -- | ID of the workflow run
     id :: Text,
-    -- | Name of the workflow run
-    name :: Text,
-    -- | URL to view the workflow run
-    url :: Text,
     -- | Status of the workflow run
     status :: WorkflowRunStatus,
-    -- | Metadata associated with the run
-    metadata :: Map Text Value,
-    -- | Files associated with the run
-    files :: [File],
+    -- | The ID of the workflow that was run
+    workflowId :: Text,
+    -- | The name of the workflow that was run
+    workflowName :: Text,
+    -- | The ID of the workflow version that was run
+    workflowVersionId :: Text,
+    -- | When the workflow run was created
+    createdAt :: UTCTime,
+    -- | When the workflow run was last updated
+    updatedAt :: UTCTime,
     -- | When the workflow run was initially created
-    initialRunAt :: UTCTime,
+    initialRunAt :: Maybe UTCTime,
     -- | Whether the workflow run has been reviewed
     reviewed :: Bool,
-    -- | Outputs from document processors
-    outputs :: [ProcessorRun],
-    -- | Step runs in the workflow
-    stepRuns :: [WorkflowStepRun],
-    -- | The workflow this run belongs to
-    workflow :: Workflow,
-    -- | The batch ID if part of a batch
-    batchId :: Maybe Text,
-    -- | Reason for failure if failed
-    failureReason :: Maybe Text,
-    -- | Detailed failure message if failed
-    failureMessage :: Maybe Text,
-    -- | Who reviewed the run
-    reviewedBy :: Maybe Text,
-    -- | Note if rejected
-    rejectionNote :: Maybe Text,
-    -- | When the run was reviewed
+    -- | Who reviewed the workflow run
+    reviewedByUser :: Maybe Text,
+    -- | When the workflow run was reviewed
     reviewedAt :: Maybe UTCTime,
     -- | When the run started
     startTime :: Maybe UTCTime,
     -- | When the run ended
-    endTime :: Maybe UTCTime
+    endTime :: Maybe UTCTime,
+    -- | The batch ID if part of a batch
+    batchId :: Maybe Text,
+    -- | Note if rejected
+    rejectionNote :: Maybe Text
   }
   deriving stock (Show, Eq, Generic)
 
 instance FromJSON WorkflowRun where
   parseJSON = Aeson.withObject "WorkflowRun" $ \v -> do
-    objectType :: ObjectType <- v Aeson..: "object"
+    objectType :: Maybe ObjectType <- v Aeson..:? "object"
     id <- v Aeson..: "id"
-    name <- v Aeson..: "name"
-    url <- v Aeson..: "url"
     status <- v Aeson..: "status"
-    metadata <- v Aeson..: "metadata"
-    files <- v Aeson..: "files"
-    initialRunAt <- v Aeson..: "initialRunAt"
+    workflowId <- v Aeson..: "workflowId"
+    workflowName <- v Aeson..: "workflowName"
+    workflowVersionId <- v Aeson..: "workflowVersionId"
+    createdAt <- v Aeson..: "createdAt"
+    updatedAt <- v Aeson..: "updatedAt"
+    initialRunAt <- v Aeson..:? "initialRunAt"
     reviewed <- v Aeson..: "reviewed"
-    outputs <- v Aeson..: "outputs"
-    stepRuns <- v Aeson..: "stepRuns"
-    workflow <- v Aeson..: "workflow"
-    batchId <- v Aeson..:? "batchId"
-    failureReason <- v Aeson..:? "failureReason"
-    failureMessage <- v Aeson..:? "failureMessage"
-    reviewedBy <- v Aeson..:? "reviewedBy"
-    rejectionNote <- v Aeson..:? "rejectionNote"
+    reviewedByUser <- v Aeson..:? "reviewedByUser"
     reviewedAt <- v Aeson..:? "reviewedAt"
     startTime <- v Aeson..:? "startTime"
     endTime <- v Aeson..:? "endTime"
+    batchId <- v Aeson..:? "batchId"
+    rejectionNote <- v Aeson..:? "rejectionNote"
     pure WorkflowRun {..}
 
 instance ToJSON WorkflowRun where
   toJSON WorkflowRun {..} =
     Aeson.object $
       catMaybes
-        [ Just ("object" .= object),
+        [ ("object" .=) <$> object,
           Just ("id" .= id),
-          Just ("name" .= name),
-          Just ("url" .= url),
           Just ("status" .= status),
-          Just ("metadata" .= metadata),
-          Just ("files" .= files),
-          Just ("initialRunAt" .= initialRunAt),
+          Just ("workflowId" .= workflowId),
+          Just ("workflowName" .= workflowName),
+          Just ("workflowVersionId" .= workflowVersionId),
+          Just ("createdAt" .= createdAt),
+          Just ("updatedAt" .= updatedAt),
           Just ("reviewed" .= reviewed),
-          Just ("outputs" .= outputs),
-          Just ("stepRuns" .= stepRuns),
-          Just ("workflow" .= workflow),
-          ("batchId" .=) <$> batchId,
-          ("failureReason" .=) <$> failureReason,
-          ("failureMessage" .=) <$> failureMessage,
-          ("reviewedBy" .=) <$> reviewedBy,
-          ("rejectionNote" .=) <$> rejectionNote,
+          ("initialRunAt" .=) <$> initialRunAt,
+          ("reviewedByUser" .=) <$> reviewedByUser,
           ("reviewedAt" .=) <$> reviewedAt,
           ("startTime" .=) <$> startTime,
-          ("endTime" .=) <$> endTime
+          ("endTime" .=) <$> endTime,
+          ("batchId" .=) <$> batchId,
+          ("rejectionNote" .=) <$> rejectionNote
         ]
 
 -- | Predetermined output for a processor
@@ -500,40 +484,40 @@ type WorkflowsAPI =
     :> Capture "workflowId" Text
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
-    :> Get '[JSON] (SuccessResponse GetWorkflowResponse)
+    :> Get '[JSON] GetWorkflowResponse
     :<|> "workflows"
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
     :> QueryParam "limit" Int
     :> QueryParam "page" Int
-    :> Get '[JSON] (SuccessResponse ListWorkflowsResponse)
+    :> Get '[JSON] ListWorkflowsResponse
     :<|> "workflow_runs"
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
     :> ReqBody '[JSON] RunWorkflowRequest
-    :> Post '[JSON] (SuccessResponse RunWorkflowResponse)
+    :> Post '[JSON] RunWorkflowResponse
     :<|> "workflow_runs"
     :> Capture "runId" Text
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
-    :> Get '[JSON] (SuccessResponse GetWorkflowRunResponse)
+    :> Get '[JSON] GetWorkflowRunResponse
     :<|> "workflow_runs"
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
     :> QueryParam "workflowId" Text
     :> QueryParam "limit" Int
     :> QueryParam "page" Int
-    :> Get '[JSON] (SuccessResponse ListWorkflowRunsResponse)
+    :> Get '[JSON] ListWorkflowRunsResponse
 
 -- | Split the client functions for easier access
 workflowsAPI :: Proxy WorkflowsAPI
 workflowsAPI = Proxy
 
-getWorkflowClient :: Text -> Text -> Text -> ClientM (SuccessResponse GetWorkflowResponse)
-listWorkflowsClient :: Text -> Text -> Maybe Int -> Maybe Int -> ClientM (SuccessResponse ListWorkflowsResponse)
-runWorkflowClient :: Text -> Text -> RunWorkflowRequest -> ClientM (SuccessResponse RunWorkflowResponse)
-getWorkflowRunClient :: Text -> Text -> Text -> ClientM (SuccessResponse GetWorkflowRunResponse)
-listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Int -> Maybe Int -> ClientM (SuccessResponse ListWorkflowRunsResponse)
+getWorkflowClient :: Text -> Text -> Text -> ClientM GetWorkflowResponse
+listWorkflowsClient :: Text -> Text -> Maybe Int -> Maybe Int -> ClientM ListWorkflowsResponse
+runWorkflowClient :: Text -> Text -> RunWorkflowRequest -> ClientM RunWorkflowResponse
+getWorkflowRunClient :: Text -> Text -> Text -> ClientM GetWorkflowRunResponse
+listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Int -> Maybe Int -> ClientM ListWorkflowRunsResponse
 getWorkflowClient :<|> listWorkflowsClient :<|> runWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
 
 -- | Get a workflow
@@ -542,7 +526,7 @@ getWorkflow ::
   ApiVersion ->
   -- | Workflow ID
   Text ->
-  ClientM (SuccessResponse GetWorkflowResponse)
+  ClientM GetWorkflowResponse
 getWorkflow (ApiToken token) (ApiVersion version) workflowId =
   getWorkflowClient workflowId ("Bearer " <> token) version
 
@@ -554,7 +538,7 @@ listWorkflows ::
   Maybe Int ->
   -- | Page
   Maybe Int ->
-  ClientM (SuccessResponse ListWorkflowsResponse)
+  ClientM ListWorkflowsResponse
 listWorkflows (ApiToken token) (ApiVersion version) = listWorkflowsClient ("Bearer " <> token) version
 
 -- | Run a workflow
@@ -562,7 +546,7 @@ runWorkflow ::
   ApiToken ->
   ApiVersion ->
   RunWorkflowRequest ->
-  ClientM (SuccessResponse RunWorkflowResponse)
+  ClientM RunWorkflowResponse
 runWorkflow (ApiToken token) (ApiVersion version) = runWorkflowClient ("Bearer " <> token) version
 
 -- | Get a workflow run
@@ -571,7 +555,7 @@ getWorkflowRun ::
   ApiVersion ->
   -- | Run ID
   Text ->
-  ClientM (SuccessResponse GetWorkflowRunResponse)
+  ClientM GetWorkflowRunResponse
 getWorkflowRun (ApiToken token) (ApiVersion version) runId =
   getWorkflowRunClient runId ("Bearer " <> token) version
 
@@ -585,5 +569,5 @@ listWorkflowRuns ::
   Maybe Int ->
   -- | Page
   Maybe Int ->
-  ClientM (SuccessResponse ListWorkflowRunsResponse)
+  ClientM ListWorkflowRunsResponse
 listWorkflowRuns (ApiToken token) (ApiVersion version) = listWorkflowRunsClient ("Bearer " <> token) version

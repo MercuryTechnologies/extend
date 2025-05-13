@@ -82,4 +82,6 @@ executable extend-example
                     , text
                     , aeson
                     , servant-client
+                    , http-client
+                    , http-client-tls
     ghc-options:      -Wall 
