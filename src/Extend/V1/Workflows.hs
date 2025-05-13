@@ -18,7 +18,6 @@ module Extend.V1.Workflows
     ExtendFile (..),
     PredeterminedOutput (..),
     GetWorkflowResponse (..),
-    ListWorkflowsResponse (..),
     RunWorkflowRequest (..),
     RunWorkflowResponse (..),
     GetWorkflowRunResponse (..),
@@ -27,7 +26,6 @@ module Extend.V1.Workflows
     -- * API
     WorkflowsAPI,
     getWorkflow,
-    listWorkflows,
     runWorkflow,
     getWorkflowRun,
     listWorkflowRuns,
@@ -777,12 +775,6 @@ type WorkflowsAPI =
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
     :> Get '[JSON] GetWorkflowResponse
-    :<|> "workflows"
-    :> Header' '[Required, Strict] "Authorization" Text
-    :> Header' '[Required, Strict] "x-extend-api-version" Text
-    :> QueryParam "limit" Int
-    :> QueryParam "page" Int
-    :> Get '[JSON] ListWorkflowsResponse
     :<|> "workflow_runs"
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
@@ -810,11 +802,10 @@ workflowsAPI :: Proxy WorkflowsAPI
 workflowsAPI = Proxy
 
 getWorkflowClient :: Text -> Text -> Text -> ClientM GetWorkflowResponse
-listWorkflowsClient :: Text -> Text -> Maybe Int -> Maybe Int -> ClientM ListWorkflowsResponse
 runWorkflowClient :: Text -> Text -> RunWorkflowRequest -> ClientM RunWorkflowResponse
 getWorkflowRunClient :: Text -> Text -> Text -> ClientM GetWorkflowRunResponse
 listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Int -> ClientM ListWorkflowRunsResponse
-getWorkflowClient :<|> listWorkflowsClient :<|> runWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
+getWorkflowClient :<|> runWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
 
 -- | Get a workflow
 getWorkflow ::
@@ -825,17 +816,6 @@ getWorkflow ::
   ClientM GetWorkflowResponse
 getWorkflow (ApiToken token) (ApiVersion version) workflowId =
   getWorkflowClient workflowId ("Bearer " <> token) version
-
--- | List workflows
-listWorkflows ::
-  ApiToken ->
-  ApiVersion ->
-  -- | Limit
-  Maybe Int ->
-  -- | Page
-  Maybe Int ->
-  ClientM ListWorkflowsResponse
-listWorkflows (ApiToken token) (ApiVersion version) = listWorkflowsClient ("Bearer " <> token) version
 
 -- | Run a workflow
 runWorkflow ::

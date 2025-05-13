@@ -6,7 +6,7 @@ module Main (main) where
 
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
-import Data.Maybe (Maybe (..), isJust)
+import Data.Maybe (isJust)
 import Data.Text (Text, pack, unpack)
 import Extend.V1
 import qualified Extend.V1.Workflows as Workflows
