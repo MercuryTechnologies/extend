@@ -19,6 +19,9 @@ data ObjectType
   | FileObject
   | ProcessorObject
   | ProcessorRunObject
+  | DocumentProcessorRunObject
+  | WorkflowStepRunObject
+  | WorkflowStepObject
   deriving stock (Show, Eq, Generic)
 
 instance FromJSON ObjectType where
@@ -28,6 +31,9 @@ instance FromJSON ObjectType where
     "file" -> pure FileObject
     "processor" -> pure ProcessorObject
     "processor_run" -> pure ProcessorRunObject
+    "document_processor_run" -> pure DocumentProcessorRunObject
+    "workflow_step_run" -> pure WorkflowStepRunObject
+    "workflow_step" -> pure WorkflowStepObject
     _ -> fail "Unknown object type"
 
 instance ToJSON ObjectType where
@@ -37,6 +43,9 @@ instance ToJSON ObjectType where
     FileObject -> String "file"
     ProcessorObject -> String "processor"
     ProcessorRunObject -> String "processor_run"
+    DocumentProcessorRunObject -> String "document_processor_run"
+    WorkflowStepRunObject -> String "workflow_step_run"
+    WorkflowStepObject -> String "workflow_step"
 
 -- | Generic success response
 data SuccessResponse a = SuccessResponse

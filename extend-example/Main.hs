@@ -243,8 +243,8 @@ runWorkflowCmd token version request = do
             Nothing -> pure ()
           case Workflows.createdWorkflowRunWorkflow run of
             Just workflow -> do
-              putStrLn $ "    Workflow: " ++ unpack (Workflows.createdWorkflowName workflow)
-              putStrLn $ "    Version: " ++ unpack (Workflows.createdWorkflowVersion workflow)
+              putStrLn $ "    Workflow: " ++ unpack (Workflows.workflowSummaryName workflow)
+              putStrLn $ "    Version: " ++ unpack (Workflows.workflowSummaryVersion workflow)
             Nothing -> pure ()
       )
       workflowRuns
@@ -261,7 +261,7 @@ listWorkflowRunsCmd token version maybeWorkflowId maybeStatus maybeFileNameConta
   liftIO $ do
     putStrLn $ "Success: " ++ show success
     putStrLn $ "Found " ++ show (length workflowRuns) ++ " workflow runs:"
-    mapM_ printWorkflowRun workflowRuns
+    mapM_ printWorkflowRunSummary workflowRuns
     when (isJust nextPageToken) $
       putStrLn $
         "Next page token: "
@@ -284,9 +284,58 @@ printWorkflowRun :: Workflows.WorkflowRun -> IO ()
 printWorkflowRun workflowRun = do
   putStrLn $ "  - Run: " ++ unpack (Workflows.workflowRunId workflowRun)
   putStrLn $ "    Status: " ++ show (Workflows.workflowRunStatus workflowRun)
-  putStrLn $ "    Workflow: " ++ unpack (Workflows.workflowRunWorkflowName workflowRun)
-  putStrLn $ "    Created at: " ++ show (Workflows.workflowRunCreatedAt workflowRun)
+  case Workflows.workflowRunWorkflowName workflowRun of
+    Just name -> putStrLn $ "    Workflow Name: " ++ unpack name
+    Nothing ->
+      case Workflows.workflowRunWorkflow workflowRun of
+        Just workflow -> putStrLn $ "    Workflow: " ++ unpack (Workflows.workflowSummaryName workflow)
+        Nothing -> putStrLn "    Workflow: (unknown)"
+
+  -- Display timestamps if available
+  case Workflows.workflowRunInitialRunAt workflowRun of
+    Just initialRunAt -> putStrLn $ "    Initial Run At: " ++ show initialRunAt
+    Nothing -> putStrLn "    Initial Run At: (unknown)"
+
+  case Workflows.workflowRunStartTime workflowRun of
+    Just startTime -> putStrLn $ "    Start Time: " ++ show startTime
+    Nothing -> putStrLn "    Start Time: (unknown)"
+
+  case Workflows.workflowRunEndTime workflowRun of
+    Just endTime -> putStrLn $ "    End Time: " ++ show endTime
+    Nothing -> putStrLn "    End Time: (unknown)"
+
   putStrLn $ "    Reviewed: " ++ show (Workflows.workflowRunReviewed workflowRun)
+
+  case Workflows.workflowRunReviewedAt workflowRun of
+    Just reviewedAt -> putStrLn $ "    Reviewed At: " ++ show reviewedAt
+    Nothing -> pure ()
+
+  putStrLn ""
+
+-- | Helper to print a workflow run summary
+printWorkflowRunSummary :: Workflows.WorkflowRunSummary -> IO ()
+printWorkflowRunSummary workflowRun = do
+  putStrLn $ "  - Run: " ++ unpack (Workflows.workflowRunSummaryId workflowRun)
+  putStrLn $ "    Status: " ++ show (Workflows.workflowRunSummaryStatus workflowRun)
+  putStrLn $ "    Workflow: " ++ unpack (Workflows.workflowRunSummaryWorkflowName workflowRun)
+
+  -- Display timestamps if available
+  putStrLn $ "    Created at: " ++ show (Workflows.workflowRunSummaryCreatedAt workflowRun)
+
+  case Workflows.workflowRunSummaryInitialRunAt workflowRun of
+    Just initialRunAt -> putStrLn $ "    Initial Run At: " ++ show initialRunAt
+    Nothing -> pure ()
+
+  case Workflows.workflowRunSummaryStartTime workflowRun of
+    Just startTime -> putStrLn $ "    Start Time: " ++ show startTime
+    Nothing -> pure ()
+
+  case Workflows.workflowRunSummaryEndTime workflowRun of
+    Just endTime -> putStrLn $ "    End Time: " ++ show endTime
+    Nothing -> pure ()
+
+  putStrLn $ "    Reviewed: " ++ show (Workflows.workflowRunSummaryReviewed workflowRun)
+
   putStrLn ""
 
 -- | CLI options

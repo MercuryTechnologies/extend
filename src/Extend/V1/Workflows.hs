@@ -7,12 +7,14 @@
 module Extend.V1.Workflows
   ( -- * Types
     Workflow (..),
+    WorkflowSummary (..),
     CreatedWorkflow (..),
     WorkflowStep (..),
     WorkflowStepRun (..),
     ValidationRule (..),
     StepRunOutput (..),
     WorkflowRun (..),
+    WorkflowRunSummary (..),
     CreatedWorkflowRun (..),
     WorkflowRunStatus (..),
     ExtendFile (..),
@@ -22,6 +24,8 @@ module Extend.V1.Workflows
     RunWorkflowResponse (..),
     GetWorkflowRunResponse (..),
     ListWorkflowRunsResponse (..),
+    DocumentProcessorRun (..),
+    MergedProcessor (..),
 
     -- * API
     WorkflowsAPI,
@@ -37,7 +41,6 @@ import Data.Proxy (Proxy (..))
 import Extend.Prelude
 import Extend.V1.Common
 import Extend.V1.Files (File)
-import Extend.V1.Processors (ProcessorRun)
 
 -- | A workflow step
 data WorkflowStep = WorkflowStep
@@ -55,13 +58,13 @@ data WorkflowStep = WorkflowStep
 instance FromJSON WorkflowStep where
   parseJSON = Aeson.withObject "WorkflowStep" $ \v -> do
     objectType <- v Aeson..: "object"
-    id <- v Aeson..: "id"
+    stepId <- v Aeson..: "id"
     name <- v Aeson..: "name"
     type_ <- v Aeson..: "type"
     pure
       WorkflowStep
         { workflowStepObject = objectType,
-          workflowStepId = id,
+          workflowStepId = stepId,
           workflowStepName = name,
           workflowStepType = type_
         }
@@ -96,14 +99,14 @@ instance FromJSON ValidationRule where
     valid <- v Aeson..: "valid"
     validArray <- v Aeson..:? "validArray"
     failureReason <- v Aeson..:? "failureReason"
-    error <- v Aeson..:? "error"
+    validationError <- v Aeson..:? "error"
     pure
       ValidationRule
         { validationRuleName = name,
           validationRuleValid = valid,
           validationRuleValidArray = validArray,
           validationRuleFailureReason = failureReason,
-          validationRuleError = error
+          validationRuleError = validationError
         }
 
 instance ToJSON ValidationRule where
@@ -154,14 +157,14 @@ data WorkflowStepRun = WorkflowStepRun
 instance FromJSON WorkflowStepRun where
   parseJSON = Aeson.withObject "WorkflowStepRun" $ \v -> do
     objectType <- v Aeson..: "object"
-    id <- v Aeson..: "id"
+    stepRunId <- v Aeson..: "id"
     status <- v Aeson..: "status"
     step <- v Aeson..: "step"
     output <- v Aeson..:? "output"
     pure
       WorkflowStepRun
         { workflowStepRunObject = objectType,
-          workflowStepRunId = id,
+          workflowStepRunId = stepRunId,
           workflowStepRunStatus = status,
           workflowStepRunStep = step,
           workflowStepRunOutput = output
@@ -200,7 +203,7 @@ data Workflow = Workflow
 instance FromJSON Workflow where
   parseJSON = Aeson.withObject "Workflow" $ \v -> do
     objectType <- v Aeson..: "object"
-    id <- v Aeson..: "id"
+    workflowId <- v Aeson..: "id"
     name <- v Aeson..: "name"
     description <- v Aeson..:? "description"
     version <- v Aeson..: "version"
@@ -209,7 +212,7 @@ instance FromJSON Workflow where
     pure
       Workflow
         { workflowObject = objectType,
-          workflowId = id,
+          workflowId = workflowId,
           workflowName = name,
           workflowDescription = description,
           workflowVersion = version,
@@ -259,10 +262,194 @@ instance ToJSON WorkflowRunStatus where
     Processed -> String "PROCESSED"
     Failed -> String "FAILED"
 
+-- | A simplified workflow summary returned in workflow runs
+data WorkflowSummary = WorkflowSummary
+  { -- | Type of the object
+    workflowSummaryObject :: ObjectType,
+    -- | ID of the workflow
+    workflowSummaryId :: Text,
+    -- | Version of the workflow
+    workflowSummaryVersion :: Text,
+    -- | Name of the workflow
+    workflowSummaryName :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON WorkflowSummary where
+  parseJSON = Aeson.withObject "WorkflowSummary" $ \v -> do
+    objectType <- v Aeson..: "object"
+    workflowSummaryId <- v Aeson..: "id"
+    version <- v Aeson..: "version"
+    name <- v Aeson..: "name"
+    pure
+      WorkflowSummary
+        { workflowSummaryObject = objectType,
+          workflowSummaryId = workflowSummaryId,
+          workflowSummaryVersion = version,
+          workflowSummaryName = name
+        }
+
+instance ToJSON WorkflowSummary where
+  toJSON WorkflowSummary {..} =
+    Aeson.object
+      [ "object" .= workflowSummaryObject,
+        "id" .= workflowSummaryId,
+        "version" .= workflowSummaryVersion,
+        "name" .= workflowSummaryName
+      ]
+
+-- | A merged processor reference in document processor run outputs
+data MergedProcessor = MergedProcessor
+  { -- | ID of the processor
+    mergedProcessorProcessorId :: Text,
+    -- | ID of the processor version
+    mergedProcessorProcessorVersionId :: Text,
+    -- | Name of the processor
+    mergedProcessorProcessorName :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON MergedProcessor where
+  parseJSON = Aeson.withObject "MergedProcessor" $ \v -> do
+    processorId <- v Aeson..: "processorId"
+    processorVersionId <- v Aeson..: "processorVersionId"
+    processorName <- v Aeson..: "processorName"
+    pure
+      MergedProcessor
+        { mergedProcessorProcessorId = processorId,
+          mergedProcessorProcessorVersionId = processorVersionId,
+          mergedProcessorProcessorName = processorName
+        }
+
+instance ToJSON MergedProcessor where
+  toJSON MergedProcessor {..} =
+    Aeson.object
+      [ "processorId" .= mergedProcessorProcessorId,
+        "processorVersionId" .= mergedProcessorProcessorVersionId,
+        "processorName" .= mergedProcessorProcessorName
+      ]
+
+-- | A document processor run in workflow outputs
+data DocumentProcessorRun = DocumentProcessorRun
+  { -- | Type of the object
+    documentProcessorRunObject :: ObjectType,
+    -- | ID of the processor run
+    documentProcessorRunId :: Text,
+    -- | ID of the processor
+    documentProcessorRunProcessorId :: Text,
+    -- | ID of the processor version
+    documentProcessorRunProcessorVersionId :: Text,
+    -- | Name of the processor
+    documentProcessorRunProcessorName :: Text,
+    -- | Status of the processor run
+    documentProcessorRunStatus :: Text,
+    -- | Output from the processor
+    documentProcessorRunOutput :: Value,
+    -- | Whether the output has been reviewed
+    documentProcessorRunReviewed :: Bool,
+    -- | Whether the output has been edited
+    documentProcessorRunEdited :: Bool,
+    -- | Edits made to the output
+    documentProcessorRunEdits :: Value,
+    -- | Type of processor
+    documentProcessorRunType :: Maybe Text,
+    -- | Processor configuration
+    documentProcessorRunConfig :: Maybe Value,
+    -- | Files processed
+    documentProcessorRunFiles :: Maybe [File],
+    -- | Merged processors
+    documentProcessorRunMergedProcessors :: Maybe [MergedProcessor],
+    -- | Dashboard URL for the processor run
+    documentProcessorRunUrl :: Maybe Text,
+    -- | Reason for failure if failed
+    documentProcessorRunFailureReason :: Maybe Text,
+    -- | Detailed failure message if failed
+    documentProcessorRunFailureMessage :: Maybe Text,
+    -- | Metadata for the processor run
+    documentProcessorRunMetadata :: Maybe Value,
+    -- | Initial output from the processor
+    documentProcessorRunInitialOutput :: Maybe Value,
+    -- | Reviewed output from the processor
+    documentProcessorRunReviewedOutput :: Maybe Value
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON DocumentProcessorRun where
+  parseJSON = Aeson.withObject "DocumentProcessorRun" $ \v -> do
+    objectType <- v Aeson..: "object"
+    documentProcessorRunId <- v Aeson..: "id"
+    processorId <- v Aeson..: "processorId"
+    processorVersionId <- v Aeson..: "processorVersionId"
+    processorName <- v Aeson..: "processorName"
+    status <- v Aeson..: "status"
+    output <- v Aeson..: "output"
+    reviewed <- v Aeson..: "reviewed"
+    edited <- v Aeson..: "edited"
+    edits <- v Aeson..: "edits"
+    type_ <- v Aeson..:? "type"
+    config <- v Aeson..:? "config"
+    files <- v Aeson..:? "files"
+    mergedProcessors <- v Aeson..:? "mergedProcessors"
+    url <- v Aeson..:? "url"
+    failureReason <- v Aeson..:? "failureReason"
+    failureMessage <- v Aeson..:? "failureMessage"
+    metadata <- v Aeson..:? "metadata"
+    initialOutput <- v Aeson..:? "initialOutput"
+    reviewedOutput <- v Aeson..:? "reviewedOutput"
+    pure
+      DocumentProcessorRun
+        { documentProcessorRunObject = objectType,
+          documentProcessorRunId = documentProcessorRunId,
+          documentProcessorRunProcessorId = processorId,
+          documentProcessorRunProcessorVersionId = processorVersionId,
+          documentProcessorRunProcessorName = processorName,
+          documentProcessorRunStatus = status,
+          documentProcessorRunOutput = output,
+          documentProcessorRunReviewed = reviewed,
+          documentProcessorRunEdited = edited,
+          documentProcessorRunEdits = edits,
+          documentProcessorRunType = type_,
+          documentProcessorRunConfig = config,
+          documentProcessorRunFiles = files,
+          documentProcessorRunMergedProcessors = mergedProcessors,
+          documentProcessorRunUrl = url,
+          documentProcessorRunFailureReason = failureReason,
+          documentProcessorRunFailureMessage = failureMessage,
+          documentProcessorRunMetadata = metadata,
+          documentProcessorRunInitialOutput = initialOutput,
+          documentProcessorRunReviewedOutput = reviewedOutput
+        }
+
+instance ToJSON DocumentProcessorRun where
+  toJSON DocumentProcessorRun {..} =
+    Aeson.object $
+      catMaybes
+        [ Just ("object" .= documentProcessorRunObject),
+          Just ("id" .= documentProcessorRunId),
+          Just ("processorId" .= documentProcessorRunProcessorId),
+          Just ("processorVersionId" .= documentProcessorRunProcessorVersionId),
+          Just ("processorName" .= documentProcessorRunProcessorName),
+          Just ("status" .= documentProcessorRunStatus),
+          Just ("output" .= documentProcessorRunOutput),
+          Just ("reviewed" .= documentProcessorRunReviewed),
+          Just ("edited" .= documentProcessorRunEdited),
+          Just ("edits" .= documentProcessorRunEdits),
+          ("type" .=) <$> documentProcessorRunType,
+          ("config" .=) <$> documentProcessorRunConfig,
+          ("files" .=) <$> documentProcessorRunFiles,
+          ("mergedProcessors" .=) <$> documentProcessorRunMergedProcessors,
+          ("url" .=) <$> documentProcessorRunUrl,
+          ("failureReason" .=) <$> documentProcessorRunFailureReason,
+          ("failureMessage" .=) <$> documentProcessorRunFailureMessage,
+          ("metadata" .=) <$> documentProcessorRunMetadata,
+          ("initialOutput" .=) <$> documentProcessorRunInitialOutput,
+          ("reviewedOutput" .=) <$> documentProcessorRunReviewedOutput
+        ]
+
 -- | A workflow run
 data WorkflowRun = WorkflowRun
   { -- | Type of the object
-    workflowRunObject :: Maybe ObjectType,
+    workflowRunObject :: ObjectType,
     -- | ID of the workflow run
     workflowRunId :: Text,
     -- | Name of the workflow run
@@ -276,15 +463,15 @@ data WorkflowRun = WorkflowRun
     -- | Files associated with the workflow run
     workflowRunFiles :: Maybe [File],
     -- | The ID of the workflow that was run
-    workflowRunWorkflowId :: Text,
+    workflowRunWorkflowId :: Maybe Text,
     -- | The name of the workflow that was run
-    workflowRunWorkflowName :: Text,
+    workflowRunWorkflowName :: Maybe Text,
     -- | The ID of the workflow version that was run
-    workflowRunWorkflowVersionId :: Text,
+    workflowRunWorkflowVersionId :: Maybe Text,
     -- | When the workflow run was created
-    workflowRunCreatedAt :: UTCTime,
+    workflowRunCreatedAt :: Maybe UTCTime,
     -- | When the workflow run was last updated
-    workflowRunUpdatedAt :: UTCTime,
+    workflowRunUpdatedAt :: Maybe UTCTime,
     -- | When the workflow run was initially created
     workflowRunInitialRunAt :: Maybe UTCTime,
     -- | Whether the workflow run has been reviewed
@@ -298,11 +485,11 @@ data WorkflowRun = WorkflowRun
     -- | When the run ended
     workflowRunEndTime :: Maybe UTCTime,
     -- | Processor output results
-    workflowRunOutputs :: Maybe [ProcessorRun],
+    workflowRunOutputs :: Maybe [DocumentProcessorRun],
     -- | Workflow step runs
     workflowRunStepRuns :: Maybe [WorkflowStepRun],
     -- | The associated workflow
-    workflowRunWorkflow :: Maybe Workflow,
+    workflowRunWorkflow :: Maybe WorkflowSummary,
     -- | The batch ID if part of a batch
     workflowRunBatchId :: Maybe Text,
     -- | Reason for failure
@@ -316,18 +503,18 @@ data WorkflowRun = WorkflowRun
 
 instance FromJSON WorkflowRun where
   parseJSON = Aeson.withObject "WorkflowRun" $ \v -> do
-    objectType :: Maybe ObjectType <- v Aeson..:? "object"
-    id <- v Aeson..: "id"
+    objectType <- v Aeson..: "object"
+    runId <- v Aeson..: "id"
     name <- v Aeson..:? "name"
     url <- v Aeson..:? "url"
     status <- v Aeson..: "status"
     metadata <- v Aeson..:? "metadata"
     files <- v Aeson..:? "files"
-    workflowId <- v Aeson..: "workflowId"
-    workflowName <- v Aeson..: "workflowName"
-    workflowVersionId <- v Aeson..: "workflowVersionId"
-    createdAt <- v Aeson..: "createdAt"
-    updatedAt <- v Aeson..: "updatedAt"
+    workflowId <- v Aeson..:? "workflowId"
+    workflowName <- v Aeson..:? "workflowName"
+    workflowVersionId <- v Aeson..:? "workflowVersionId"
+    createdAt <- v Aeson..:? "createdAt"
+    updatedAt <- v Aeson..:? "updatedAt"
     initialRunAt <- v Aeson..:? "initialRunAt"
     reviewed <- v Aeson..: "reviewed"
     reviewedBy <- v Aeson..:? "reviewedBy"
@@ -344,7 +531,7 @@ instance FromJSON WorkflowRun where
     pure
       WorkflowRun
         { workflowRunObject = objectType,
-          workflowRunId = id,
+          workflowRunId = runId,
           workflowRunName = name,
           workflowRunUrl = url,
           workflowRunStatus = status,
@@ -374,20 +561,20 @@ instance ToJSON WorkflowRun where
   toJSON WorkflowRun {..} =
     Aeson.object $
       catMaybes
-        [ ("object" .=) <$> workflowRunObject,
+        [ Just ("object" .= workflowRunObject),
           Just ("id" .= workflowRunId),
           ("name" .=) <$> workflowRunName,
           ("url" .=) <$> workflowRunUrl,
           Just ("status" .= workflowRunStatus),
           ("metadata" .=) <$> workflowRunMetadata,
           ("files" .=) <$> workflowRunFiles,
-          Just ("workflowId" .= workflowRunWorkflowId),
-          Just ("workflowName" .= workflowRunWorkflowName),
-          Just ("workflowVersionId" .= workflowRunWorkflowVersionId),
-          Just ("createdAt" .= workflowRunCreatedAt),
-          Just ("updatedAt" .= workflowRunUpdatedAt),
-          Just ("reviewed" .= workflowRunReviewed),
+          ("workflowId" .=) <$> workflowRunWorkflowId,
+          ("workflowName" .=) <$> workflowRunWorkflowName,
+          ("workflowVersionId" .=) <$> workflowRunWorkflowVersionId,
+          ("createdAt" .=) <$> workflowRunCreatedAt,
+          ("updatedAt" .=) <$> workflowRunUpdatedAt,
           ("initialRunAt" .=) <$> workflowRunInitialRunAt,
+          Just ("reviewed" .= workflowRunReviewed),
           ("reviewedBy" .=) <$> workflowRunReviewedBy,
           ("reviewedAt" .=) <$> workflowRunReviewedAt,
           ("startTime" .=) <$> workflowRunStartTime,
@@ -582,13 +769,13 @@ data CreatedWorkflow = CreatedWorkflow
 instance FromJSON CreatedWorkflow where
   parseJSON = Aeson.withObject "CreatedWorkflow" $ \v -> do
     objectType <- v Aeson..: "object"
-    id <- v Aeson..: "id"
+    createdWorkflowId <- v Aeson..: "id"
     version <- v Aeson..: "version"
     name <- v Aeson..: "name"
     pure
       CreatedWorkflow
         { createdWorkflowObject = objectType,
-          createdWorkflowId = id,
+          createdWorkflowId = createdWorkflowId,
           createdWorkflowVersion = version,
           createdWorkflowName = name
         }
@@ -623,11 +810,11 @@ data CreatedWorkflowRun = CreatedWorkflowRun
     -- | Whether the workflow run has been reviewed
     createdWorkflowRunReviewed :: Bool,
     -- | Processor output results
-    createdWorkflowRunOutputs :: Maybe [ProcessorRun],
+    createdWorkflowRunOutputs :: Maybe [DocumentProcessorRun],
     -- | Workflow step runs
     createdWorkflowRunStepRuns :: Maybe [WorkflowStepRun],
     -- | The associated workflow
-    createdWorkflowRunWorkflow :: Maybe CreatedWorkflow,
+    createdWorkflowRunWorkflow :: Maybe WorkflowSummary,
     -- | The batch ID if part of a batch
     createdWorkflowRunBatchId :: Maybe Text
   }
@@ -636,7 +823,7 @@ data CreatedWorkflowRun = CreatedWorkflowRun
 instance FromJSON CreatedWorkflowRun where
   parseJSON = Aeson.withObject "CreatedWorkflowRun" $ \v -> do
     objectType <- v Aeson..: "object"
-    id <- v Aeson..: "id"
+    runId <- v Aeson..: "id"
     name <- v Aeson..:? "name"
     url <- v Aeson..:? "url"
     status <- v Aeson..: "status"
@@ -651,7 +838,7 @@ instance FromJSON CreatedWorkflowRun where
     pure
       CreatedWorkflowRun
         { createdWorkflowRunObject = objectType,
-          createdWorkflowRunId = id,
+          createdWorkflowRunId = runId,
           createdWorkflowRunName = name,
           createdWorkflowRunUrl = url,
           createdWorkflowRunStatus = status,
@@ -736,12 +923,104 @@ instance ToJSON GetWorkflowRunResponse where
         "workflowRun" .= getWorkflowRunResponseWorkflowRun
       ]
 
+-- | A workflow run summary for list responses
+data WorkflowRunSummary = WorkflowRunSummary
+  { -- | ID of the workflow run
+    workflowRunSummaryId :: Text,
+    -- | Status of the workflow run
+    workflowRunSummaryStatus :: WorkflowRunStatus,
+    -- | When the workflow run was initially created
+    workflowRunSummaryInitialRunAt :: Maybe UTCTime,
+    -- | Whether the workflow run has been reviewed
+    workflowRunSummaryReviewed :: Bool,
+    -- | When the run started
+    workflowRunSummaryStartTime :: Maybe UTCTime,
+    -- | The ID of the workflow that was run
+    workflowRunSummaryWorkflowId :: Text,
+    -- | The name of the workflow that was run
+    workflowRunSummaryWorkflowName :: Text,
+    -- | The ID of the workflow version that was run
+    workflowRunSummaryWorkflowVersionId :: Text,
+    -- | The batch ID if part of a batch
+    workflowRunSummaryBatchId :: Maybe Text,
+    -- | When the workflow run was created
+    workflowRunSummaryCreatedAt :: UTCTime,
+    -- | When the workflow run was last updated
+    workflowRunSummaryUpdatedAt :: UTCTime,
+    -- | Name of the workflow run
+    workflowRunSummaryName :: Maybe Text,
+    -- | Dashboard URL for the workflow run
+    workflowRunSummaryUrl :: Maybe Text,
+    -- | When the run ended
+    workflowRunSummaryEndTime :: Maybe UTCTime,
+    -- | Files associated with the workflow run
+    workflowRunSummaryFiles :: Maybe [File]
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON WorkflowRunSummary where
+  parseJSON = Aeson.withObject "WorkflowRunSummary" $ \v -> do
+    workflowRunSummaryId <- v Aeson..: "id"
+    status <- v Aeson..: "status"
+    initialRunAt <- v Aeson..:? "initialRunAt"
+    reviewed <- v Aeson..: "reviewed"
+    startTime <- v Aeson..:? "startTime"
+    workflowId <- v Aeson..: "workflowId"
+    workflowName <- v Aeson..: "workflowName"
+    workflowVersionId <- v Aeson..: "workflowVersionId"
+    batchId <- v Aeson..:? "batchId"
+    createdAt <- v Aeson..: "createdAt"
+    updatedAt <- v Aeson..: "updatedAt"
+    name <- v Aeson..:? "name"
+    url <- v Aeson..:? "url"
+    endTime <- v Aeson..:? "endTime"
+    files <- v Aeson..:? "files"
+    pure
+      WorkflowRunSummary
+        { workflowRunSummaryId = workflowRunSummaryId,
+          workflowRunSummaryStatus = status,
+          workflowRunSummaryInitialRunAt = initialRunAt,
+          workflowRunSummaryReviewed = reviewed,
+          workflowRunSummaryStartTime = startTime,
+          workflowRunSummaryWorkflowId = workflowId,
+          workflowRunSummaryWorkflowName = workflowName,
+          workflowRunSummaryWorkflowVersionId = workflowVersionId,
+          workflowRunSummaryBatchId = batchId,
+          workflowRunSummaryCreatedAt = createdAt,
+          workflowRunSummaryUpdatedAt = updatedAt,
+          workflowRunSummaryName = name,
+          workflowRunSummaryUrl = url,
+          workflowRunSummaryEndTime = endTime,
+          workflowRunSummaryFiles = files
+        }
+
+instance ToJSON WorkflowRunSummary where
+  toJSON WorkflowRunSummary {..} =
+    Aeson.object $
+      catMaybes
+        [ Just ("id" .= workflowRunSummaryId),
+          Just ("status" .= workflowRunSummaryStatus),
+          ("initialRunAt" .=) <$> workflowRunSummaryInitialRunAt,
+          Just ("reviewed" .= workflowRunSummaryReviewed),
+          ("startTime" .=) <$> workflowRunSummaryStartTime,
+          Just ("workflowId" .= workflowRunSummaryWorkflowId),
+          Just ("workflowName" .= workflowRunSummaryWorkflowName),
+          Just ("workflowVersionId" .= workflowRunSummaryWorkflowVersionId),
+          ("batchId" .=) <$> workflowRunSummaryBatchId,
+          Just ("createdAt" .= workflowRunSummaryCreatedAt),
+          Just ("updatedAt" .= workflowRunSummaryUpdatedAt),
+          ("name" .=) <$> workflowRunSummaryName,
+          ("url" .=) <$> workflowRunSummaryUrl,
+          ("endTime" .=) <$> workflowRunSummaryEndTime,
+          ("files" .=) <$> workflowRunSummaryFiles
+        ]
+
 -- | Response from listing workflow runs
 data ListWorkflowRunsResponse = ListWorkflowRunsResponse
   { -- | Whether the request was successful
     listWorkflowRunsResponseSuccess :: Bool,
     -- | The workflow runs
-    listWorkflowRunsResponseWorkflowRuns :: [WorkflowRun],
+    listWorkflowRunsResponseWorkflowRuns :: [WorkflowRunSummary],
     -- | The next page token
     listWorkflowRunsResponseNextPageToken :: Maybe Text
   }
