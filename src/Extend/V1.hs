@@ -59,21 +59,15 @@ module Extend.V1
   )
 where
 
-import qualified Control.Exception as Exception
-import Data.Aeson.Types (Parser)
-import Data.Proxy (Proxy (..))
 import Extend.Prelude
 import Extend.V1.Common
 import Extend.V1.Error
 import Extend.V1.Files
-import Extend.V1.Files (FilesAPI)
-import Extend.V1.Processors (ProcessorsAPI)
 import Extend.V1.Processors hiding (Failed, Pending, Processed, Processing)
 import Extend.V1.Workflows
-import Extend.V1.Workflows (WorkflowsAPI)
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as TLS
-import Servant.Client (BaseUrl (..), ClientEnv, Scheme (..))
+import Servant.Client (BaseUrl (..), Scheme (..))
 import qualified Servant.Client as Client
 
 -- | Parse a BaseUrl from a string
