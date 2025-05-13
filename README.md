@@ -54,8 +54,10 @@ Workflows are the primary way to process documents in Extend:
 
 ```haskell
 import Extend.V1
+import qualified Extend.V1.Workflows as Workflows
 import Control.Exception (throwIO)
 import Servant.Client (runClientM)
+import Data.Text (unpack)
 
 runExtendWorkflow :: IO ()
 runExtendWorkflow = do
@@ -87,10 +89,95 @@ runExtendWorkflow = do
 
   case result of
     Left err -> throwIO err
-    Right (SuccessResponse _ response) -> do
+    Right response -> do
       -- Process the workflow runs
       let runs = workflowRuns response
-      -- ...
+      mapM_ processWorkflowRun runs
+
+-- Process a workflow run
+processWorkflowRun :: Workflows.WorkflowRun -> IO ()
+processWorkflowRun run = do
+  -- Access fields of the WorkflowRun
+  putStrLn $ "Workflow Run ID: " ++ unpack (Workflows.id run)
+  putStrLn $ "Status: " ++ show (Workflows.status run)
+  putStrLn $ "Workflow: " ++ unpack (Workflows.workflowName run)
+  putStrLn $ "Workflow ID: " ++ unpack (Workflows.workflowId run)
+  putStrLn $ "Workflow Version ID: " ++ unpack (Workflows.workflowVersionId run)
+  putStrLn $ "Created at: " ++ show (Workflows.createdAt run)
+  putStrLn $ "Updated at: " ++ show (Workflows.updatedAt run)
+  putStrLn $ "Reviewed: " ++ show (Workflows.reviewed run)
+
+  -- Access optional fields
+  case Workflows.initialRunAt run of
+    Just initialRunAt -> putStrLn $ "Initial run at: " ++ show initialRunAt
+    Nothing -> pure ()
+
+  case Workflows.reviewedByUser run of
+    Just reviewer -> putStrLn $ "Reviewed by: " ++ unpack reviewer
+    Nothing -> pure ()
+
+  case Workflows.reviewedAt run of
+    Just reviewedAt -> putStrLn $ "Reviewed at: " ++ show reviewedAt
+    Nothing -> pure ()
+
+  case Workflows.startTime run of
+    Just startTime -> putStrLn $ "Started at: " ++ show startTime
+    Nothing -> pure ()
+
+  case Workflows.endTime run of
+    Just endTime -> putStrLn $ "Ended at: " ++ show endTime
+    Nothing -> pure ()
+
+  case Workflows.batchId run of
+    Just batchId -> putStrLn $ "Batch ID: " ++ unpack batchId
+    Nothing -> pure ()
+
+  case Workflows.rejectionNote run of
+    Just note -> putStrLn $ "Rejection note: " ++ unpack note
+    Nothing -> pure ()
+```
+
+### Listing Workflow Runs
+
+You can list existing workflow runs:
+
+```haskell
+import Extend.V1
+import qualified Extend.V1.Workflows as Workflows
+import Control.Exception (throwIO)
+import Servant.Client (runClientM)
+import Data.Text (unpack)
+
+listWorkflowRunsExample :: IO ()
+listWorkflowRunsExample = do
+  -- Create client environment
+  env <- getClientEnv "api.extend.ai"
+
+  -- Define API token and version
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+
+  -- List workflow runs
+  result <- runClientM (listWorkflowRuns token version Nothing Nothing Nothing) env
+
+  case result of
+    Left err -> throwIO err
+    Right (Workflows.ListWorkflowRunsResponse success workflowRuns nextPageToken) -> do
+      putStrLn $ "Found " ++ show (length workflowRuns) ++ " workflow runs"
+
+      -- Process each workflow run
+      mapM_ (\run -> do
+          putStrLn $ "Run ID: " ++ unpack (Workflows.id run)
+          putStrLn $ "Status: " ++ show (Workflows.status run)
+          putStrLn $ "Workflow: " ++ unpack (Workflows.workflowName run)
+          putStrLn $ "Created at: " ++ show (Workflows.createdAt run)
+          putStrLn ""
+        ) workflowRuns
+
+      -- Handle pagination if more results are available
+      case nextPageToken of
+        Just token -> putStrLn $ "More results available with token: " ++ unpack token
+        Nothing -> putStrLn "No more results available"
 ```
 
 ### Working with Files
@@ -213,7 +300,7 @@ errorHandlingExample = do
         _ ->
           putStrLn $ "Other error: " ++ show err
 
-    Right (SuccessResponse _ response) -> do
+    Right response -> do
       -- Process the workflow runs
       let runs = workflowRuns response
       -- ...
