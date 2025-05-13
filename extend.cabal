@@ -30,7 +30,6 @@ library
                       , scientific
                       , servant
                       , servant-client
-                      , servant-client-core
                       , text
                       , time
                       , vector
@@ -82,4 +81,5 @@ executable extend-example
                     , extend
                     , text
                     , aeson
+                    , servant-client
     ghc-options:      -Wall 

@@ -4,9 +4,6 @@
     flake = false;
   };
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-
   outputs = { all-cabal-hashes, flake-utils, nixpkgs, self }:
     flake-utils.lib.eachDefaultSystem (system:
       let
@@ -19,11 +16,11 @@
         };
 
       in
-        { packages.default = pkgs.haskellPackagesCustom.extend;
+        { packages.default = pkgs.haskellPackagesCustom.extend-package;
 
           devShells.default = pkgs.haskellPackagesCustom.shellFor {
             packages = hpkgs: [
-              hpkgs.extend
+              hpkgs.extend-package
             ];
 
             nativeBuildInputs = [
@@ -53,7 +50,7 @@
             in
               self.lib.composeManyExtensions [
                 (hlib.packageSourceOverrides {
-                  extend = ./.;
+                  extend-package = ./.;
                 })
 
                 (hlib.packagesFromDirectory {

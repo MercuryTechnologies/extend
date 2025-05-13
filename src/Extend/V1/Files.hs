@@ -24,6 +24,8 @@ module Extend.V1.Files
   )
 where
 
+import qualified Data.Aeson as Aeson
+import Data.Proxy (Proxy (..))
 import Extend.Prelude
 import Extend.V1.Common
 
@@ -53,7 +55,7 @@ instance FromJSON ParentSplit where
 
 instance ToJSON ParentSplit where
   toJSON ParentSplit {..} =
-    object
+    Aeson.object
       [ "id" .= id,
         "type" .= type_,
         "identifier" .= identifier,
@@ -78,7 +80,7 @@ instance FromJSON FileMetadata where
 
 instance ToJSON FileMetadata where
   toJSON FileMetadata {..} =
-    object $
+    Aeson.object $
       catMaybes
         [ ("pageCount" .=) <$> pageCount,
           ("parentSplit" .=) <$> parentSplit
@@ -113,7 +115,7 @@ instance FromJSON Page where
 
 instance ToJSON Page where
   toJSON Page {..} =
-    object $
+    Aeson.object $
       catMaybes
         [ Just ("pageNumber" .= pageNumber),
           ("pageHeight" .=) <$> pageHeight,
@@ -140,7 +142,7 @@ instance FromJSON Sheet where
 
 instance ToJSON Sheet where
   toJSON Sheet {..} =
-    object $
+    Aeson.object $
       catMaybes
         [ Just ("sheetName" .= sheetName),
           ("rawText" .=) <$> rawText
@@ -169,7 +171,7 @@ instance FromJSON FileContents where
 
 instance ToJSON FileContents where
   toJSON FileContents {..} =
-    object $
+    Aeson.object $
       catMaybes
         [ ("rawText" .=) <$> rawText,
           ("markdown" .=) <$> markdown,
@@ -230,7 +232,7 @@ instance FromJSON File where
 
 instance ToJSON File where
   toJSON File {..} =
-    object $
+    Aeson.object $
       catMaybes
         [ Just ("object" .= object),
           Just ("id" .= id),
@@ -255,7 +257,7 @@ data CreateFileRequest = CreateFileRequest
 
 instance ToJSON CreateFileRequest where
   toJSON CreateFileRequest {..} =
-    object $
+    Aeson.object $
       catMaybes
         [ Just ("name" .= name),
           ("type" .=) <$> type_
@@ -345,8 +347,19 @@ type FilesAPI =
     :> Capture "fileId" Text
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
-    :> ReqBody '[JSON] NoContent
+    :> ReqBody '[JSON] ()
     :> Post '[JSON] DeleteFileResponse
+
+-- | Split the client functions for easier access
+filesAPI :: Proxy FilesAPI
+filesAPI = Proxy
+
+createFileClient :: Text -> Text -> CreateFileRequest -> ClientM (SuccessResponse CreateFileResponse)
+uploadFileClient :: Text -> Text -> Text -> Text -> ClientM UploadFileResponse
+getFileClient :: Text -> Text -> Text -> ClientM (SuccessResponse GetFileResponse)
+listFilesClient :: Text -> Text -> Maybe Int -> Maybe Int -> ClientM (SuccessResponse ListFilesResponse)
+deleteFileClient :: Text -> Text -> Text -> () -> ClientM DeleteFileResponse
+createFileClient :<|> uploadFileClient :<|> getFileClient :<|> listFilesClient :<|> deleteFileClient = client filesAPI
 
 -- | Create a new file
 createFile ::
@@ -354,11 +367,8 @@ createFile ::
   ApiVersion ->
   CreateFileRequest ->
   ClientM (SuccessResponse CreateFileResponse)
-createFile (ApiToken token) (ApiVersion version) =
-  client
-    (Proxy @FilesAPI)
-    ("Bearer " <> token)
-    version
+createFile (ApiToken token) (ApiVersion version) req =
+  createFileClient ("Bearer " <> token) version req
 
 -- | Upload a file
 uploadFile ::
@@ -369,7 +379,8 @@ uploadFile ::
   -- | File contents
   Text ->
   ClientM UploadFileResponse
-uploadFile (ApiToken token) (ApiVersion version) = client (Proxy @FilesAPI) ("Bearer " <> token) version
+uploadFile (ApiToken token) (ApiVersion version) fileId contents =
+  uploadFileClient fileId ("Bearer " <> token) version contents
 
 -- | Get a file
 getFile ::
@@ -378,7 +389,8 @@ getFile ::
   -- | File ID
   Text ->
   ClientM (SuccessResponse GetFileResponse)
-getFile (ApiToken token) (ApiVersion version) = client (Proxy @FilesAPI) ("Bearer " <> token) version
+getFile (ApiToken token) (ApiVersion version) fileId =
+  getFileClient fileId ("Bearer " <> token) version
 
 -- | List files
 listFiles ::
@@ -389,8 +401,8 @@ listFiles ::
   -- | Page
   Maybe Int ->
   ClientM (SuccessResponse ListFilesResponse)
-listFiles (ApiToken token) (ApiVersion version) =
-  client (Proxy @FilesAPI) ("Bearer " <> token) version
+listFiles (ApiToken token) (ApiVersion version) limit page =
+  listFilesClient ("Bearer " <> token) version limit page
 
 -- | Delete a file
 deleteFile ::
@@ -400,4 +412,4 @@ deleteFile ::
   Text ->
   ClientM DeleteFileResponse
 deleteFile (ApiToken token) (ApiVersion version) fileId =
-  client (Proxy @FilesAPI) ("Bearer " <> token) version fileId NoContent
+  deleteFileClient fileId ("Bearer " <> token) version ()
