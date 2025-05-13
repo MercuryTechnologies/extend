@@ -1,0 +1,90 @@
+cabal-version:      2.4
+name:               extend
+version:            1.0.0
+synopsis:           Servant bindings to Extend AI
+description:        This package provides comprehensive and type-safe bindings
+                    to Extend AI, providing both a Servant interface and
+                    non-Servant interface for convenience.
+                    .
+                    Read the @README@ below for a fully worked usage example.
+                    .
+                    Otherwise, browse the "Extend.V1" module, which is the
+                    intended package entrypoint.
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Mercury Technologies
+maintainer:         engineering@mercury.com
+copyright:          2025 Mercury Technologies
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md README.md
+
+library
+    default-language:   Haskell2010
+    build-depends:      base >= 4.15.0.0 && < 5
+                      , aeson
+                      , bytestring
+                      , containers
+                      , http-api-data
+                      , http-client
+                      , http-client-tls
+                      , scientific
+                      , servant
+                      , servant-client
+                      , text
+                      , time
+                      , vector
+    exposed-modules:    Extend.V1
+                      , Extend.V1.Workflows
+                      , Extend.V1.Files
+                      , Extend.V1.Processors
+                      , Extend.V1.Error
+                      , Extend.V1.Common
+    other-modules:      Extend.Prelude
+    default-extensions: BlockArguments
+                      , DataKinds
+                      , DeriveGeneric
+                      , DeriveAnyClass
+                      , DerivingStrategies
+                      , DuplicateRecordFields
+                      , GeneralizedNewtypeDeriving
+                      , NamedFieldPuns
+                      , OverloadedLists
+                      , OverloadedStrings
+                      , RecordWildCards
+                      , TypeApplications
+                      , TypeOperators
+    hs-source-dirs:     src
+    ghc-options:        -Wall -Wno-missing-fields
+
+test-suite tasty
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   tasty
+    main-is:          Main.hs
+    build-depends:    base
+                    , extend
+                    , tasty
+                    , tasty-hunit
+                    , text
+                    , vector
+                    , aeson
+                    , servant-client
+                    , http-client
+                    , http-client-tls
+    ghc-options:      -Wall
+
+executable extend-example
+    default-language: Haskell2010
+    hs-source-dirs:   extend-example
+    main-is:          Main.hs
+    build-depends:    base
+                    , extend
+                    , text
+                    , aeson
+                    , servant-client
+                    , http-client
+                    , http-client-tls
+                    , optparse-applicative
+                    , bytestring
+                    , containers
+    ghc-options:      -Wall 

@@ -1,0 +1,9 @@
+packages: .
+
+-- Enable optimization
+package *
+  optimization: 2
+
+-- Enable LambdaCase extension by default
+package extend
+  ghc-options: -XLambdaCase 

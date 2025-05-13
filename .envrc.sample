@@ -1,0 +1,3 @@
+use flake .
+
+export EXTEND_API_KEY="your-extend-api-key-here" 
