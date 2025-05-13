@@ -20,8 +20,7 @@ import System.IO (hPrint, hPutStrLn, stderr)
 
 -- | CLI command options
 data Command
-  = ListWorkflows
-  | GetWorkflow Text
+  = GetWorkflow Text
   | RunWorkflow Text [FilePath]
   | ListWorkflowRuns (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int)
   | GetWorkflowRun Text
@@ -33,12 +32,6 @@ commandParser =
   subparser $
     mconcat
       [ command
-          "list-workflows"
-          ( info
-              (pure ListWorkflows)
-              (progDesc "List all workflows")
-          ),
-        command
           "get-workflow"
           ( info
               (GetWorkflow <$> workflowIdArg)
@@ -156,9 +149,6 @@ main = do
 -- | Run the appropriate command
 runCommand :: ApiToken -> ApiVersion -> Client.ClientEnv -> Command -> IO (Either Client.ClientError ())
 runCommand token version env = \case
-  ListWorkflows -> do
-    putStrLn "Listing workflows..."
-    Client.runClientM (listWorkflowsCmd token version) env
   GetWorkflow workflowId -> do
     putStrLn $ "Getting workflow: " ++ unpack workflowId
     Client.runClientM (getWorkflowCmd token version workflowId) env
@@ -207,17 +197,6 @@ runCommand token version env = \case
   GetWorkflowRun runId -> do
     putStrLn $ "Getting workflow run: " ++ unpack runId
     Client.runClientM (getWorkflowRunCmd token version runId) env
-
--- | Command to list workflows
-listWorkflowsCmd :: ApiToken -> ApiVersion -> Client.ClientM ()
-listWorkflowsCmd token version = do
-  response <- listWorkflows token version Nothing Nothing
-  let Workflows.ListWorkflowsResponse
-        { Workflows.listWorkflowsResponseWorkflows = workflows
-        } = response
-  liftIO $ do
-    putStrLn $ "Found " ++ show (length workflows) ++ " workflows:"
-    mapM_ (\wf -> putStrLn $ "  - " ++ unpack (Workflows.workflowId wf) ++ ": " ++ unpack (Workflows.workflowName wf)) workflows
 
 -- | Command to get a specific workflow
 getWorkflowCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()
