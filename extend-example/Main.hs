@@ -41,19 +41,27 @@ main = do
     Left err -> do
       putStrLn "Error listing workflow runs:"
       print err
-    Right (Workflows.ListWorkflowRunsResponse _ workflowRuns _) -> do
-      putStrLn $ "Found " ++ show (length workflowRuns) ++ " workflow runs"
-      mapM_
-        ( \run -> do
-            let runId = case run of
-                  Workflows.WorkflowRun _ id status workflowId workflowName _ createdAt _ _ _ _ _ _ _ _ _ -> id
-            putStrLn $ "  - Workflow run: " ++ unpack runId
-            putStrLn $ "    Status: " ++ show (case run of Workflows.WorkflowRun _ _ status _ _ _ _ _ _ _ _ _ _ _ _ _ -> status)
-            putStrLn $ "    Workflow: " ++ unpack (case run of Workflows.WorkflowRun _ _ _ _ workflowName _ _ _ _ _ _ _ _ _ _ _ -> workflowName)
-            putStrLn $ "    Created at: " ++ show (case run of Workflows.WorkflowRun _ _ _ _ _ _ createdAt _ _ _ _ _ _ _ _ _ -> createdAt)
-            putStrLn ""
-        )
-        workflowRuns
+    Right
+      ( Workflows.ListWorkflowRunsResponse
+          listWorkflowRunsResponseSuccess
+          listWorkflowRunsResponseWorkflowRuns
+          _
+        ) -> do
+        putStrLn $ "Found " ++ show (length listWorkflowRunsResponseWorkflowRuns) ++ " workflow runs"
+        mapM_
+          ( \run@Workflows.WorkflowRun
+               { Workflows.workflowRunId = runId,
+                 Workflows.workflowRunStatus = runStatus,
+                 Workflows.workflowRunWorkflowName = wfName,
+                 Workflows.workflowRunCreatedAt = created
+               } -> do
+                putStrLn $ "  - Workflow run: " ++ unpack runId
+                putStrLn $ "    Status: " ++ show runStatus
+                putStrLn $ "    Workflow: " ++ unpack wfName
+                putStrLn $ "    Created at: " ++ show created
+                putStrLn ""
+          )
+          listWorkflowRunsResponseWorkflowRuns
 
   -- Example: Run a workflow (if needed)
   -- Uncomment and modify this section to run a workflow
@@ -62,18 +70,18 @@ main = do
 
   -- Create the request to run a workflow
   let runRequest = RunWorkflowRequest
-          { workflowId = "wf_your_workflow_id"
-          , files = Just
+          { runWorkflowRequestWorkflowId = "wf_your_workflow_id"
+          , runWorkflowRequestFiles = Just
               [ ExtendFile
-                  { fileName = Just "example.pdf"
-                  , fileUrl = Just "https://example.com/file.pdf"
-                  , fileId = Nothing
-                  , outputs = Nothing
+                  { extendFileFileName = Just "example.pdf"
+                  , extendFileFileUrl = Just "https://example.com/file.pdf"
+                  , extendFileFileId = Nothing
+                  , extendFileOutputs = Nothing
                   }
               ]
-          , rawTexts = Nothing
-          , priority = Just 50
-          , metadata = Nothing
+          , runWorkflowRequestRawTexts = Nothing
+          , runWorkflowRequestPriority = Just 50
+          , runWorkflowRequestMetadata = Nothing
           }
 
   runResult <- Client.runClientM (runWorkflow token version runRequest) env
@@ -82,10 +90,10 @@ main = do
       Left err -> do
           putStrLn "Error running workflow:"
           print err
-      Right (SuccessResponse success response) -> do
+      Right (RunWorkflowResponse success workflowRuns) -> do
           putStrLn $ "Success: " ++ show success
-          putStrLn $ "Created " ++ show (length (workflowRuns response)) ++ " workflow runs"
-          mapM_ (\_ -> putStrLn "  - Workflow run") (workflowRuns response)
+          putStrLn $ "Created " ++ show (length workflowRuns) ++ " workflow runs"
+          mapM_ (\_ -> putStrLn "  - Workflow run") workflowRuns
   -}
 
   putStrLn "Example completed."
