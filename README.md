@@ -81,7 +81,9 @@ runExtendWorkflow = do
             ]
         , rawTexts = Nothing
         , priority = Just 50
-        , metadata = Nothing
+        , metadata = Just
+            [("customer_id", String "cust_123"),
+             ("reference_number", String "REF-456")]
         }
 
   -- Run the workflow
@@ -98,43 +100,64 @@ runExtendWorkflow = do
 processWorkflowRun :: Workflows.WorkflowRun -> IO ()
 processWorkflowRun run = do
   -- Access fields of the WorkflowRun
-  putStrLn $ "Workflow Run ID: " ++ unpack (Workflows.id run)
-  putStrLn $ "Status: " ++ show (Workflows.status run)
-  putStrLn $ "Workflow: " ++ unpack (Workflows.workflowName run)
-  putStrLn $ "Workflow ID: " ++ unpack (Workflows.workflowId run)
-  putStrLn $ "Workflow Version ID: " ++ unpack (Workflows.workflowVersionId run)
-  putStrLn $ "Created at: " ++ show (Workflows.createdAt run)
-  putStrLn $ "Updated at: " ++ show (Workflows.updatedAt run)
-  putStrLn $ "Reviewed: " ++ show (Workflows.reviewed run)
+  putStrLn $ "Workflow Run ID: " ++ unpack (Workflows.workflowRunId run)
+  putStrLn $ "Status: " ++ show (Workflows.workflowRunStatus run)
+  putStrLn $ "Workflow: " ++ unpack (fromMaybe "" (Workflows.workflowRunWorkflowName run))
+  putStrLn $ "Workflow ID: " ++ unpack (fromMaybe "" (Workflows.workflowRunWorkflowId run))
+  putStrLn $ "Created at: " ++ show (Workflows.workflowRunCreatedAt run)
+  putStrLn $ "Updated at: " ++ show (Workflows.workflowRunUpdatedAt run)
+  putStrLn $ "Reviewed: " ++ show (Workflows.workflowRunReviewed run)
 
   -- Access optional fields
-  case Workflows.initialRunAt run of
+  case Workflows.workflowRunInitialRunAt run of
     Just initialRunAt -> putStrLn $ "Initial run at: " ++ show initialRunAt
     Nothing -> pure ()
 
-  case Workflows.reviewedByUser run of
+  case Workflows.workflowRunReviewedBy run of
     Just reviewer -> putStrLn $ "Reviewed by: " ++ unpack reviewer
     Nothing -> pure ()
 
-  case Workflows.reviewedAt run of
+  case Workflows.workflowRunReviewedAt run of
     Just reviewedAt -> putStrLn $ "Reviewed at: " ++ show reviewedAt
     Nothing -> pure ()
 
-  case Workflows.startTime run of
+  case Workflows.workflowRunStartTime run of
     Just startTime -> putStrLn $ "Started at: " ++ show startTime
     Nothing -> pure ()
 
-  case Workflows.endTime run of
+  case Workflows.workflowRunEndTime run of
     Just endTime -> putStrLn $ "Ended at: " ++ show endTime
     Nothing -> pure ()
 
-  case Workflows.batchId run of
+  case Workflows.workflowRunBatchId run of
     Just batchId -> putStrLn $ "Batch ID: " ++ unpack batchId
     Nothing -> pure ()
 
-  case Workflows.rejectionNote run of
+  case Workflows.workflowRunRejectionNote run of
     Just note -> putStrLn $ "Rejection note: " ++ unpack note
     Nothing -> pure ()
+
+  -- Access metadata if available
+  case Workflows.workflowRunMetadata run of
+    Just metadata -> do
+      putStrLn "Metadata:"
+      mapM_ (\(key, value) -> putStrLn $ "  " ++ unpack key ++ ": " ++ show value) (toList metadata)
+    Nothing -> pure ()
+
+  -- Process document processor runs if available
+  case Workflows.workflowRunOutputs run of
+    Just outputs -> do
+      putStrLn $ "Processor outputs: " ++ show (length outputs)
+      mapM_ processProcessorOutput outputs
+    Nothing -> pure ()
+
+-- Process a document processor output
+processProcessorOutput :: Workflows.DocumentProcessorRun -> IO ()
+processProcessorOutput output = do
+  putStrLn $ "  Processor: " ++ unpack (Workflows.documentProcessorRunProcessorName output)
+  putStrLn $ "  Status: " ++ unpack (Workflows.documentProcessorRunStatus output)
+  putStrLn $ "  Reviewed: " ++ show (Workflows.documentProcessorRunReviewed output)
+  putStrLn $ "  Edited: " ++ show (Workflows.documentProcessorRunEdited output)
 ```
 
 ### Listing Workflow Runs
@@ -162,15 +185,18 @@ listWorkflowRunsExample = do
 
   case result of
     Left err -> throwIO err
-    Right (Workflows.ListWorkflowRunsResponse success workflowRuns nextPageToken) -> do
+    Right response -> do
+      let workflowRuns = Workflows.listWorkflowRunsResponseRuns response
+          nextPageToken = Workflows.listWorkflowRunsResponseNextPageToken response
+
       putStrLn $ "Found " ++ show (length workflowRuns) ++ " workflow runs"
 
       -- Process each workflow run
       mapM_ (\run -> do
-          putStrLn $ "Run ID: " ++ unpack (Workflows.id run)
-          putStrLn $ "Status: " ++ show (Workflows.status run)
-          putStrLn $ "Workflow: " ++ unpack (Workflows.workflowName run)
-          putStrLn $ "Created at: " ++ show (Workflows.createdAt run)
+          putStrLn $ "Run ID: " ++ unpack (Workflows.workflowRunId run)
+          putStrLn $ "Status: " ++ show (Workflows.workflowRunStatus run)
+          putStrLn $ "Workflow: " ++ unpack (fromMaybe "" (Workflows.workflowRunWorkflowName run))
+          putStrLn $ "Created at: " ++ show (Workflows.workflowRunCreatedAt run)
           putStrLn ""
         ) workflowRuns
 
@@ -186,6 +212,7 @@ You can manage files in the Extend platform:
 
 ```haskell
 import Extend.V1
+import qualified Extend.V1.Files as Files
 import Control.Exception (throwIO)
 import Servant.Client (runClientM)
 
@@ -209,7 +236,7 @@ uploadFileExample = do
   case result of
     Left err -> throwIO err
     Right (SuccessResponse _ response) -> do
-      let fileId = id (file response)
+      let fileId = Files.id (Files.file response)
 
       -- Upload file content
       let fileContent = "file content as text" -- Or binary data encoded as Text
@@ -219,7 +246,31 @@ uploadFileExample = do
         Left err -> throwIO err
         Right response -> do
           -- File uploaded successfully
-          -- ...
+          putStrLn $ "File uploaded: " ++ show (success response)
+
+      -- Get file information
+      getFileResult <- runClientM (getFile token version fileId) env
+
+      case getFileResult of
+        Left err -> throwIO err
+        Right (SuccessResponse _ fileResponse) -> do
+          let file = Files.file fileResponse
+          putStrLn $ "File name: " ++ unpack (Files.name file)
+          putStrLn $ "File type: " ++ unpack (fromMaybe "" (Files.type_ file))
+
+          -- Access file contents if available
+          case Files.contents file of
+            Just contents -> do
+              case Files.rawText contents of
+                Just text -> putStrLn $ "Raw text: " ++ unpack text
+                Nothing -> pure ()
+
+              -- Access pages if available
+              case Files.pages contents of
+                Just pages -> putStrLn $ "Number of pages: " ++ show (length pages)
+                Nothing -> pure ()
+
+            Nothing -> pure ()
 ```
 
 ### Running Processors
@@ -228,8 +279,10 @@ Processors are individual document processing components:
 
 ```haskell
 import Extend.V1
+import qualified Extend.V1.Processors as Processors
 import Control.Exception (throwIO)
 import Servant.Client (runClientM)
+import Data.Aeson (object, (.=))
 
 runProcessorExample :: IO ()
 runProcessorExample = do
@@ -243,7 +296,10 @@ runProcessorExample = do
   -- Create a request to run a processor
   let request = RunProcessorRequest
         { fileIds = ["file_123456789"]
-        , config = Nothing
+        , config = Just (ProcessorConfig (object [
+              "language" .= ("english" :: Text),
+              "extractFields" .= True
+            ]))
         }
 
   -- Run the processor
@@ -254,7 +310,22 @@ runProcessorExample = do
     Right (SuccessResponse _ response) -> do
       -- Process the processor run
       let run = processorRun response
-      -- ...
+      putStrLn $ "Processor run ID: " ++ unpack (Processors.id run)
+      putStrLn $ "Status: " ++ show (Processors.status run)
+      putStrLn $ "Processor: " ++ unpack (Processors.processorName run)
+      putStrLn $ "Created at: " ++ show (Processors.createdAt run)
+
+      -- Access the output
+      putStrLn $ "Output: " ++ show (Processors.output run)
+
+      -- Process files
+      let files = Processors.files run
+      putStrLn $ "Number of files: " ++ show (length files)
+
+      -- Check for failures
+      case Processors.failureReason run of
+        Just reason -> putStrLn $ "Failure reason: " ++ unpack reason
+        Nothing -> pure ()
 ```
 
 ## Error Handling
