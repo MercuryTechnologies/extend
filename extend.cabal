@@ -47,6 +47,7 @@ library
                       , DerivingStrategies
                       , DuplicateRecordFields
                       , GeneralizedNewtypeDeriving
+                      , LambdaCase
                       , NamedFieldPuns
                       , OverloadedLists
                       , OverloadedStrings
