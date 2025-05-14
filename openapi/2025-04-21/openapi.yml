@@ -1,0 +1,4369 @@
+openapi: 3.1.0
+info:
+  title: Extend API
+  version: "2025-04-21"
+  description: |
+    The Extend API for workflow and document processing operations.
+
+servers:
+  - url: https://api.extend.ai
+    description: Production API Server
+    x-fern-server-name: production
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Workflow Endpoints
+    description: Endpoints for managing and running workflows
+  - name: Processor Endpoints
+    description: Endpoints for managing and running processors
+  - name: Parse Endpoints
+    description: Endpoints for parsing and processing documents
+  - name: File Endpoints
+    description: Endpoints for managing files
+  - name: Evaluation Set Endpoints
+    description: Endpoints for managing evaluation sets
+  - name: Webhooks
+    description: Webhook events and configurations
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ApiVersion:
+      name: x-extend-api-version
+      in: header
+      schema:
+        $ref: "#/components/schemas/ApiVersionEnum"
+      description: API version to use for the request. If you do not specify a version, you will either receive a `400 Bad Request` or be set to a previous legacy version. See [API Versioning](https://docs.extend.ai/2025-04-21/developers/api-versioning) for more details.
+      example: "2025-04-21"
+
+  responses:
+    Error400:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Error401:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Error404:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Error message
+
+    WorkflowStatus:
+      type: string
+      enum: [PENDING, PROCESSING, NEEDS_REVIEW, REJECTED, PROCESSED, FAILED]
+      description: |
+        The status of a workflow run:
+        * `"PENDING"` - The workflow run is in progress
+        * `"PROCESSING"` - The workflow run completed successfully
+        * `"NEEDS_REVIEW"` - The workflow run requires manual review
+        * `"REJECTED"` - The workflow run was rejected during review
+        * `"PROCESSED"` - The workflow run completed successfully
+        * `"FAILED"` - The workflow run encountered an error
+
+    WorkflowRun:
+      type: object
+      required:
+        - id
+        - status
+        - object
+        - reviewed
+        - url
+        - files
+        - metadata
+        - initialRunAt
+        - outputs
+        - stepRuns
+        - name
+        - workflow
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"workflow_run"`.
+          example: "workflow_run"
+        id:
+          type: string
+          description: |
+            The ID of the workflow run.
+
+            Example: `"workflow_run_xKm9pNv3qWsY_jL2tR5Dh"`
+          example: "workflow_run_xKm9pNv3qWsY_jL2tR5Dh"
+        name:
+          type: string
+          description: |
+            The name of the workflow run.
+
+            Example: `"myFirstFile.pdf"`
+          example: "myFirstFile.pdf"
+        url:
+          type: string
+          description: |
+            A URL to view this workflow run in the Extend UI.
+
+            Example: `"https://dashboard.extend.ai/workflows/workflow_Bk9mNp2qWs5_xL8vR4tYh?workflowRunId=workflow_run_Zj3nMx7ZPd9f4c2WQ_kAg"`
+          example: "https://dashboard.extend.ai/workflows/workflow_Bk9mNp2qWs5_xL8vR4tYh?workflowRunId=workflow_run_Zj3nMx7ZPd9f4c2WQ_kAg"
+        status:
+          $ref: "#/components/schemas/WorkflowStatus"
+        metadata:
+          "$ref": "#/components/schemas/JsonObject"
+          description: |
+            The metadata that was passed in when running the Workflow.
+        batchId:
+          type: string
+          description: |
+            The batch ID of the WorkflowRun. If this WorkflowRun was created as part of a batch of files, all runs in that batch will have the same batch ID.
+
+            Example: `"batch_7Ws31-F5"`
+          example: "batch_7Ws31-F5"
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/File"
+        failureReason:
+          type: string
+          description: |
+            The reason why the workflow run failed. Will only be included if the workflow run status is "FAILED".
+        failureMessage:
+          type: string
+          description: |
+            A more detailed message about the failure. Will only be included if the workflow run status is "FAILED".
+        initialRunAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow run was created. Will follow the RFC 3339 format.
+
+            Example: `"2025-04-28T17:01:39.285Z"`
+          example: "2025-04-28T17:01:39.285Z"
+        reviewedBy:
+          type: string
+          description: |
+            The email address of the person who reviewed the workflow run. Will not be included if the workflow run has not been reviewed.
+
+            Example: `"jane.doe@example.com"`
+          example: "jane.doe@example.com"
+        reviewed:
+          type: boolean
+          description: |
+            Whether the workflow run has been reviewed.
+        rejectionNote:
+          type: string
+          description: |
+            A note that is added if a workflow run is rejected.
+
+            Example: `"Invalid invoice format"`
+        reviewedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow run was reviewed. Will follow the RFC 3339 format. Will not be included if the workflow run has not been reviewed.
+
+            Example: `"2024-03-21T16:45:00Z"`
+          example: "2024-03-21T16:45:00Z"
+        startTime:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow run started executing. This will always be after the `initialRunAt` time. Will follow the RFC 3339 format. Will not be included if the workflow run has not started executing.
+
+            Example: `"2024-03-21T15:30:00Z"`
+          example: "2024-03-21T15:30:00Z"
+        endTime:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) that the workflow finished executing. Will follow the RFC 3339 format. Will not be included if the workflow run has not finished executing.
+
+            Example: `"2024-03-21T15:35:00Z"`
+          example: "2024-03-21T15:35:00Z"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcessorRun"
+        stepRuns:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepRun"
+          description: |
+            An array of WorkflowStepRun objects. Each WorkflowStepRun represents a single run of a WorkflowStep and contains details about the step and the run's output.
+
+            Note: This field currently supports External Data Validation and Rule Validation step types. Document processor run outputs are included in the outputs field.
+        workflow:
+          $ref: "#/components/schemas/Workflow"
+
+    JsonObject:
+      type: object
+      additionalProperties:
+        x-fern-type: unknown
+      description: A flexible object that can hold any arbitrary JSON key-value structure.
+
+    StepRun:
+      type: object
+      required:
+        - object
+        - id
+        - status
+        - step
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"workflow_step_run"`.
+          example: workflow_step_run
+        id:
+          type: string
+          description: |
+            The ID of the workflow step run.
+
+            Example: `"workflow_step_run_xKm9pNv3qWsY_jL2tR5Dh"`
+          example: "workflow_step_run_xK9mLPqRtN3vS8wF5hB2cQ"
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, PROCESSED, FAILED]
+          description: |
+            The status of the workflow step run:
+            * `"PENDING"` - The step run is waiting to be executed
+            * `"PROCESSING"` - The step run is currently executing
+            * `"PROCESSED"` - The step run completed successfully
+            * `"FAILED"` - The step run encountered an error
+          example: "PENDING"
+        step:
+          type: object
+          required:
+            - object
+            - id
+            - name
+            - type
+          properties:
+            object:
+              type: string
+              description: |
+                The type of response. In this case, it will always be `"workflow_step"`.
+              example: workflow_step
+            id:
+              type: string
+              description: |
+                The ID of the workflow step.
+
+                Example: `"step_xKm9pNv3qWsY_jL2tR5Dh"`
+              example: "step_xK9mLPqRtN3vS8wF5hB2cQ"
+            name:
+              type: string
+              description: |
+                The name of the workflow step.
+
+                Example: `"Validate Invoice Total"`
+              example: "Validate Invoice Total"
+            type:
+              type: string
+              enum: [EXTERNAL_DATA_VALIDATION, RULE_VALIDATION]
+              description: |
+                The type of workflow step:
+                * `"EXTERNAL_DATA_VALIDATION"` - Validates data against an external source
+                * `"RULE_VALIDATION"` - Validates data against defined rules
+              example: "EXTERNAL_DATA_VALIDATION"
+        output:
+          type: object
+          description: |
+            The output of the WorkflowStepRun. The shape of the output depends on the type of the WorkflowStep in the `step` field:
+            * For `"EXTERNAL_DATA_VALIDATION"` steps - The output will be the same object that was returned by the external endpoint configured for this step
+            * For `"RULE_VALIDATION"` steps - See the below shape:
+          properties:
+            rules:
+              type: array
+              items:
+                type: object
+                required:
+                  - name
+                  - valid
+                properties:
+                  name:
+                    type: string
+                    description: The name of the validation rule.
+                  valid:
+                    type: boolean
+                    description: |
+                      Indicates whether this validation rule passed or not. This field will be `true` only if the formula evaluates to `true`. If the rule's formula is array valued, then this field will only be `true` if the formula evaluates to `true` for every item in the array.
+                  validArray:
+                    type: array
+                    items:
+                      type: string
+                    description: |
+                      Only present if the validation rule's formula is array valued. This field contains the formula's evaluated result for every item in the array.
+                  failureReason:
+                    type: string
+                    enum: [RULE_FAILED, PARSE_ERROR, VALUE_ERROR]
+                    description: |
+                      If the validation rule is not valid, then this describes why the rule failed.
+                      * `"RULE_FAILED"` - The formula evaluated to `false` or `null`
+                      * `"PARSE_ERROR"` - The formula could not be parsed
+                      * `"VALUE_ERROR"` - An error occurred while evaluating the formula
+                  error:
+                    type: string
+                    description: |
+                      If the `failureReason` is `PARSE_ERROR` or `VALUE_ERROR`, then this field contains the error's details.
+
+    Workflow:
+      type: object
+      required:
+        - object
+        - id
+        - version
+        - name
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"workflow"`.
+          example: workflow
+        id:
+          type: string
+          description: |
+            The ID of the workflow.
+
+            Example: `"workflow_BMlfq_yWM3sT-ZzvCnA3f"`
+          example: "workflow_BMlfq_yWM3sT-ZzvCnA3f"
+        version:
+          type: string
+          description: |
+            The version of the workflow.
+
+            Examples: `"3"`, `"draft"`
+          example: "draft"
+        name:
+          type: string
+          description: |
+            The name of the workflow.
+
+            Example: `"Invoice Processing"`
+          example: "Invoice Processing"
+    ProcessorRun:
+      type: object
+      required:
+        - object
+        - id
+        - mergedProcessors
+        - output
+        - processorId
+        - processorVersionId
+        - status
+        - type
+        - processorName
+        - reviewed
+        - edited
+        - config
+        - url
+        - files
+        - edits
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"document_processor_run"`.
+          example: document_processor_run
+        id:
+          type: string
+          description: |
+            The unique identifier for this processor run.
+
+            Example: `"dpr_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "dpr_Xj8mK2pL9nR4vT7qY5wZ"
+        processorId:
+          type: string
+          description: |
+            The ID of the processor used for this run.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "dp_Xj8mK2pL9nR4vT7qY5wZ"
+        processorVersionId:
+          type: string
+          description: |
+            The ID of the specific processor version used.
+          example: "dpv_Xj8mK2pL9nR4vT7qY5wZ"
+        processorName:
+          type: string
+          description: |
+            The name of the processor.
+
+            Example: `"Invoice Processor"`
+          example: "Invoice Processor"
+        status:
+          type: string
+          enum: [PROCESSING, PROCESSED, FAILED]
+          description: |
+            The current status of the processor run:
+            * `"PROCESSING"` - The processor is currently running
+            * `"PROCESSED"` - The processor has completed successfully
+            * `"FAILED"` - The processor encountered an error
+          example: "PROCESSING"
+        output:
+          $ref: "#/components/schemas/ProcessorOutput"
+          description: |
+            The final output, either reviewed or initial.
+
+            Conforms to the shape of output types and depends on the processor type and configuration shape.
+        failureReason:
+          type: string
+          description: |
+            If the run failed, indicates the reason for failure.
+        failureMessage:
+          type: string
+          description: |
+            If the run failed, provides a detailed message about the failure.
+        metadata:
+          "$ref": "#/components/schemas/JsonObject"
+          description: Any metadata that was provided when creating the processor run.
+        reviewed:
+          type: boolean
+          description: Indicates whether the run has been reviewed.
+          example: false
+        edited:
+          type: boolean
+          description: Indicates whether the run results have been edited.
+          example: false
+        edits:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ExtractionOutputEdits"
+        type:
+          type: string
+          enum: [CLASSIFY, EXTRACT, SPLITTER]
+          description: |
+            The type of processor:
+            * `"CLASSIFY"` - Classifies documents into categories
+            * `"EXTRACT"` - Extracts structured data from documents
+            * `"SPLITTER"` - Splits documents into multiple parts
+          example: "CLASSIFY"
+        config:
+          oneOf:
+            - $ref: "#/components/schemas/ClassificationConfig"
+            - $ref: "#/components/schemas/ExtractionConfig"
+            - $ref: "#/components/schemas/SplitterConfig"
+          description: The configuration used for this processor run. The type of configuration will match the processor type.
+        initialOutput:
+          $ref: "#/components/schemas/ProcessorOutput"
+          description: The initial output from the processor run. The type of output will match the processor type.
+        reviewedOutput:
+          $ref: "#/components/schemas/ProcessorOutput"
+          description: The output after review, if any.
+        files:
+          type: array
+          description: |
+            Details of the processed files.
+
+            If this was a file generated from a splitter processor, this will be the sub file.
+
+            See the File object for more details.
+          items:
+            $ref: "#/components/schemas/File"
+        mergedProcessors:
+          type: array
+          description: |
+            An array of processors that were merged to create this output. Will be an empty array unless this output was the result of a MergeExtraction step in a workflow.
+          items:
+            type: object
+            required:
+              - processorId
+              - processorVersionId
+              - processorName
+            properties:
+              processorId:
+                type: string
+                description: |
+                  The ID of the merged processor.
+
+                  Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+                example: "dp_Xj8mK2pL9nR4vT7qY5wZ"
+              processorVersionId:
+                type: string
+                description: |
+                  The ID of the specific processor version used.
+                example: "dpv_Xj8mK2pL9nR4vT7qY5wZ"
+              processorName:
+                type: string
+                description: |
+                  The name of the merged processor.
+
+                  Example: `"Invoice Line Items Processor"`
+                example: "Invoice Line Items Processor"
+        url:
+          type: string
+          description: |
+            The URL to view the processor run.
+          example: "https://dashboard.extend.ai/runs/dpr_Xj8mK2pL9nR4vT7qY5wZ"
+
+    ExtractionOutputEdits:
+      type: object
+      description: |
+        A record of edits made to the processor output.
+      properties:
+        originalValue:
+          description: The original value before editing.
+          x-fern-type: unknown
+        editedValue:
+          description: The value after editing.
+          x-fern-type: unknown
+        notes:
+          type: string
+          description: Any notes added during editing.
+          example: "This is a note about the edit."
+        page:
+          type: number
+          description: The page number where the edit was made.
+          example: 15
+        fieldType:
+          type: string
+          description: The type of the edited field.
+          example: "string"
+
+    Processor:
+      type: object
+      required:
+        - object
+        - id
+        - name
+        - type
+        - createdAt
+        - updatedAt
+        - draftVersion
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"document_processor"`.
+          example: document_processor
+        id:
+          type: string
+          description: |
+            The ID of the processor.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "dp_Xj8mK2pL9nR4vT7qY5wZ"
+        name:
+          type: string
+          description: |
+            The name of the processor.
+
+            Example: `"Invoice Processor"`
+          example: "Invoice Processor"
+        type:
+          $ref: "#/components/schemas/ProcessorType"
+        createdAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the processor was created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+          example: "2024-03-21T15:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the processor was last updated. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+          example: "2024-03-21T16:45:00Z"
+        draftVersion:
+          $ref: "#/components/schemas/ProcessorVersion"
+
+    ProcessorVersion:
+      type: object
+      required:
+        - object
+        - id
+        - version
+        - processorType
+        - processorId
+        - config
+        - createdAt
+        - updatedAt
+      properties:
+        object:
+          type: string
+          description: |
+            The type of the object. In this case, it will always be `"document_processor_version"`.
+          example: document_processor_version
+        id:
+          type: string
+          description: |
+            The unique identifier for this version of the document processor.
+
+            Example: `"dpv_xK9mLPqRtN3vS8wF5hB2cQ"`
+          example: "dpv_xK9mLPqRtN3vS8wF5hB2cQ"
+        processorId:
+          type: string
+          description: |
+            The ID of the parent document processor.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "dp_Xj8mK2pL9nR4vT7qY5wZ"
+        processorName:
+          type: string
+          description: |
+            The name of the parent document processor.
+
+            Example: `"Invoice Processor"`
+          example: "Invoice Processor"
+        processorType:
+          $ref: "#/components/schemas/ProcessorType"
+        description:
+          type: string
+          description: |
+            An optional description of this version of the document processor.
+
+            Example: `"Updated extraction fields for new invoice format"`
+          example: "Updated extraction fields for new invoice format"
+        version:
+          type: string
+          description: |
+            The version number or identifier for this specific version of the document processor. The draft version will have version="draft".
+
+            Examples: `"1.0"`, `"2.1"`, `"draft"`
+          example: "draft"
+        config:
+          oneOf:
+            - $ref: "#/components/schemas/ClassificationConfig"
+            - $ref: "#/components/schemas/ExtractionConfig"
+            - $ref: "#/components/schemas/SplitterConfig"
+          description: |
+            The configuration settings for this version of the document processor. The structure of this object will vary depending on the processor type.
+
+            See the [Processor Configs guide](https://docs.extend.ai/2025-04-21/developers/guides/processor-configs) for more details on the configuration settings for each processor type.
+        createdAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which this version of the document processor was created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+          example: "2024-03-21T15:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which this version of the document processor was last updated. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+          example: "2024-03-21T16:45:00Z"
+    EvaluationSet:
+      type: object
+      description: |
+        The EvaluationSet object represents an evaluation set in Extend. Evaluation sets are collections of files and expected outputs that are used to evaluate the performance of a given processor in Extend.
+      required:
+        - object
+        - id
+        - name
+        - description
+        - processorId
+        - createdAt
+        - updatedAt
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"evaluation_set"`.
+          example: evaluation_set
+        id:
+          type: string
+          description: |
+            The ID of the evaluation set.
+
+            Example: `"ev_2LcgeY_mp2T5yPaEuq5Lw"`
+          example: "ev_2LcgeY_mp2T5yPaEuq5Lw"
+        name:
+          type: string
+          description: |
+            The name of the evaluation set.
+
+            Example: `"Invoice Processing Test Set"`
+          example: "Invoice Processing Test Set"
+        description:
+          type: string
+          description: |
+            A description of the evaluation set.
+
+            Example: `"Q4 2023 vendor invoices for accuracy testing"`
+          example: "Q4 2023 vendor invoices for accuracy testing"
+        processorId:
+          type: string
+          description: |
+            The ID of the processor associated with this evaluation set.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "dp_Xj8mK2pL9nR4vT7qY5wZ"
+        createdAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the evaluation set was created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+          example: "2024-03-21T15:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the evaluation set was last updated. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+          example: "2024-03-21T16:45:00Z"
+    EvaluationSetItem:
+      type: object
+      description: |
+        The EvaluationSetItem object represents an item in an evaluation set in Extend. Items are the individual files and expected outputs that are used to evaluate the performance of a given processor in Extend.
+      required:
+        - object
+        - id
+        - evaluationSetId
+        - fileId
+        - expectedOutput
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"evaluation_set_item"`.
+          example: evaluation_set_item
+        id:
+          type: string
+          description: |
+            The ID of the evaluation set item.
+
+            Example: `"evi_kR9mNP12Qw4yTv8BdR3H"`
+          example: "evi_kR9mNP12Qw4yTv8BdR3H"
+        evaluationSetId:
+          type: string
+          description: |
+            The ID of the evaluation set that this item belongs to.
+
+            Example: `"ev_2LcgeY_mp2T5yPaEuq5Lw"`
+          example: "ev_2LcgeY_mp2T5yPaEuq5Lw"
+        fileId:
+          type: string
+          description: |
+            Extend's internal ID for the file. It will always start with "file_".
+
+            Example: `"file_xK9mLPqRtN3vS8wF5hB2cQ"`
+          example: "file_xK9mLPqRtN3vS8wF5hB2cQ"
+        expectedOutput:
+          $ref: "#/components/schemas/ProvidedProcessorOutput"
+          description: The expected output that will be used to evaluate the processor's performance. This will confirm to the output type schema of the processor.
+    Chunk:
+      type: object
+      required:
+        - object
+        - type
+        - content
+        - metadata
+        - blocks
+      properties:
+        object:
+          type: string
+          description: |
+            The type of object. In this case, it will always be `"chunk"`.
+          example: "chunk"
+        type:
+          type: string
+          enum: [page, document, section]
+          description: The type of chunk.
+          example: "page"
+        content:
+          type: string
+          description: The parsed content of the chunk.
+          example: "This is the content of the chunk."
+        metadata:
+          type: object
+          description: Metadata about the chunk.
+          required:
+            - pageRange
+          properties:
+            pageRange:
+              type: object
+              required:
+                - start
+                - end
+              description: |
+                The page range this chunk covers. Often will just be a partial page, in which cases `start` and `end` will be the same.
+              properties:
+                start:
+                  type: integer
+                  description: The starting page number (inclusive).
+                  example: 1
+                end:
+                  type: integer
+                  description: The ending page number (inclusive).
+                  example: 1
+        blocks:
+          type: array
+          description: |
+            An array of block objects that make up the chunk. A Block represents a distinct content element within a document, such as a paragraph of text, a heading, a table, or a figure. Blocks are the fundamental units that make up chunks in parsed documents.
+          items:
+            $ref: "#/components/schemas/Block"
+
+    TableDetails:
+      type: object
+      description: Details for table blocks
+      required:
+        - type
+        - rowCount
+        - columnCount
+      properties:
+        type:
+          type: string
+          enum: [table_details]
+          description: Indicates this is a table details object
+        rowCount:
+          type: integer
+          description: The number of rows in the table
+        columnCount:
+          type: integer
+          description: The number of columns in the table
+
+    TableCellDetails:
+      type: object
+      description: Details for table cell blocks
+      required:
+        - type
+        - rowIndex
+        - columnIndex
+      properties:
+        type:
+          type: string
+          enum: [table_cell_details]
+          description: Indicates this is a table cell details object
+        rowIndex:
+          type: integer
+        columnIndex:
+          type: integer
+
+    FigureDetails:
+      type: object
+      description: Details for figure blocks
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [figure_details]
+          description: Indicates this is a figure details object
+        imageUrl:
+          type: string
+          description: URL to the clipped/segmented figure image. Only set if the option `figureImageClippingEnabled` in the input is `true`, which it is by default.
+        figureType:
+          type: string
+          enum: [other, chart, image, diagram, logo]
+          description: |
+            The refined type of figure - only set when figure classification and summarization is enabled. Possible values:
+
+            * `image`: A photographic image
+            * `chart`: A data chart or graph
+            * `diagram`: A schematic or diagram
+            * `logo`: A company or brand logo
+            * `other`: Any other type of figure
+
+    EmptyBlockDetails:
+      type: object
+      additionalProperties: false
+      description: An empty object
+
+    Block:
+      type: object
+      required:
+        - object
+        - id
+        - type
+        - content
+        - details
+        - metadata
+        - polygon
+        - boundingBox
+      properties:
+        object:
+          type: string
+          description: |
+            The type of object. In this case, it will always be `"block"`.
+          example: block
+        id:
+          type: string
+          description: A unique identifier for the block, deterministically generated as a hash of the block content.
+        type:
+          type: string
+          enum: [text, heading, section_heading, table, figure]
+          description: |
+            The type of block:
+            * `"text"` - Regular text content
+            * `"heading"` - Section or document headings 
+            * `"section_heading"` - Subsection headings
+            * `"table"` - Tabular data with rows and columns
+            * `"table_head"` - Table header cells
+            * `"table_cell"` - Table body cells
+            * `"figure"` - Images, charts, diagrams, or logos
+        content:
+          type: string
+          description: The textual content of the block formatted based on the target format.
+        details:
+          oneOf:
+            - $ref: "#/components/schemas/TableDetails"
+            - $ref: "#/components/schemas/TableCellDetails"
+            - $ref: "#/components/schemas/FigureDetails"
+            - $ref: "#/components/schemas/EmptyBlockDetails"
+
+          description: |
+            Additional details specific to the block type. The schema depends on the block type.
+        metadata:
+          type: object
+          description: Metadata about the block.
+          properties:
+            page:
+              type: object
+              description: Information about the page this block appears on.
+              required:
+                - number
+              properties:
+                number:
+                  type: integer
+                  description: The page number where this block appears.
+                width:
+                  type: number
+                  description: The width of the page in points.
+                height:
+                  type: number
+                  description: The height of the page in points.
+        polygon:
+          type: array
+          description: An array of points defining the polygon that bounds the block.
+          items:
+            type: object
+            required:
+              - x
+              - y
+            properties:
+              x:
+                type: number
+                example: 10
+              y:
+                type: number
+                example: 20
+        boundingBox:
+          type: object
+          description: A simplified bounding box for the block.
+          required:
+            - left
+            - right
+            - top
+            - bottom
+          properties:
+            left:
+              type: number
+              nullable: true
+              example: 10
+            right:
+              type: number
+              nullable: true
+              example: 20
+            top:
+              type: number
+              nullable: true
+              example: 10
+            bottom:
+              type: number
+              nullable: true
+              example: 20
+
+    BatchProcessorRun:
+      type: object
+      required:
+        - object
+        - id
+        - processorId
+        - processorName
+        - processorVersionId
+        - createdAt
+        - updatedAt
+        - status
+        - metrics
+        - source
+        - options
+        - runCount
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be `"batch_processor_run"`.
+          example: batch_processor_run
+        id:
+          type: string
+          description: |
+            The unique identifier for this batch processor run.
+
+            Example: `"batch_processor_run_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "batch_processor_run_Xj8mK2pL9nR4vT7qY5wZ"
+        processorId:
+          type: string
+          description: |
+            The ID of the processor used for this run.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: "dp_Xj8mK2pL9nR4vT7qY5wZ"
+        processorVersionId:
+          type: string
+          description: |
+            The ID of the specific processor version used.
+
+            Example: `"dpv_xK9mLPqRtN3vS8wF5hB2cQ"`
+          example: "dpv_xK9mLPqRtN3vS8wF5hB2cQ"
+        processorName:
+          type: string
+          description: |
+            The name of the processor.
+
+            Example: `"Invoice Processor"`
+          example: "Invoice Processor"
+        metrics:
+          type: object
+          properties:
+            numFiles:
+              type: number
+              description: The total number of files processed in this batch run
+            numPages:
+              type: number
+              description: The total number of pages processed in this batch run
+            # reviewAgentMetrics:
+            #   type: object
+            #   description: Metrics related to the review agent's performance
+            #   properties:
+            #     recallPerc:
+            #       type: number
+            #       description: The recall percentage of the review agent
+            #     precisionPerc:
+            #       type: number
+            #       description: The precision percentage of the review agent
+            #     f1Score:
+            #       type: number
+            #       description: The F1 score of the review agent
+            #     numFlaggedForReview:
+            #       type: number
+            #       description: Number of documents flagged for review by the agent
+            #     numActuallyNeededReview:
+            #       type: number
+            #       description: Number of documents that actually needed review
+        status:
+          type: string
+          enum: [PENDING, PROCESSING, PROCESSED, FAILED]
+          description: |
+            The current status of the batch processor run:
+            * `"PENDING"` - The batch processor run is waiting to start
+            * `"PROCESSING"` - The batch processor run is in progress
+            * `"PROCESSED"` - The batch processor run completed successfully
+            * `"FAILED"` - The batch processor run encountered an error
+          example: "PROCESSING"
+        source:
+          type: string
+          enum: [EVAL_SET, PLAYGROUND, STUDIO]
+          description: |
+            The source of the batch processor run:
+            * `"EVAL_SET"` - The batch processor run was made from an evaluation set. The `sourceId` will be the ID of the evaluation set (e.g., `"ev_1234"`)
+            * `"PLAYGROUND"` - The batch processor run was made from the playground. The `sourceId` will not be set
+            * `"STUDIO"` - The batch processor run was made for a processor in Studio. The `sourceId` will be the ID of the processor (e.g., `"dp_1234"`)
+          example: "EVAL_SET"
+        sourceId:
+          type: string
+          description: |
+            The ID of the source of the batch processor run. See the `source` field for more details.
+            Example: `"ev_1234"` for EVAL_SET source, `"dp_1234"` for STUDIO source
+          example: "ev_1234"
+        runCount:
+          type: integer
+          description: The number of runs that were made.
+          example: 1
+        options:
+          type: object
+          description: The options for the batch processor run.
+          properties:
+            fuzzyMatchFields:
+              type: array
+              items:
+                type: string
+              description: The fields that were fuzzy matched.
+            excludeFields:
+              type: array
+              items:
+                type: string
+              description: The fields that were excluded from the run.
+        createdAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the batch processor run was created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+          example: "2024-03-21T15:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the batch processor run was last updated. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+          example: "2024-03-21T16:45:00Z"
+    BaseMetrics:
+      type: object
+      description: Base metrics common to all processor types
+      properties:
+        numFiles:
+          type: number
+          description: The total number of files that were processed.
+        numPages:
+          type: number
+          description: The total number of pages that were processed.
+        meanRunTimeMs:
+          type: number
+          description: The mean runtime in milliseconds per document.
+
+    ExtractMetrics:
+      type: object
+      description: Metrics specific to extraction processors
+      allOf:
+        - $ref: "#/components/schemas/BaseMetrics"
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [EXTRACT]
+              description: The type of metrics. Will always be `"EXTRACT"` for extraction processors.
+            fieldMetrics:
+              type: object
+              description: Record mapping field names to their respective metrics.
+              properties:
+                meanConfidence:
+                  type: number
+                  description: The mean confidence score for this field across all documents.
+                recallPerc:
+                  type: number
+                  description: The recall percentage for this field, representing how many of the expected values were correctly extracted.
+                precisionPerc:
+                  type: number
+                  description: The precision percentage for this field, representing how many of the extracted values were correct.
+                fieldMetrics:
+                  type: object
+                  description: For nested object fields, this contains metrics for the child fields. Has the same structure as the parent fieldMetrics.
+            arrayCardinalityMetrics:
+              type: object
+              description: Maps the root array field name to a number indicating how many times the array field has the correct number of rows extracted.
+
+    ClassifyMetrics:
+      type: object
+      description: Metrics specific to classification processors
+      allOf:
+        - $ref: "#/components/schemas/BaseMetrics"
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [CLASSIFY]
+              description: The type of metrics. Will always be `"CLASSIFY"` for classification processors.
+            accuracyPerc:
+              type: number
+              description: The overall accuracy percentage.
+            meanConfidence:
+              type: number
+              description: The mean confidence score.
+            distribution:
+              type: object
+              description: Record mapping classification values to their counts.
+            accuracyPercByClassification:
+              type: object
+              description: Mapping from classification to accuracy percentage as calculated from the confusion matrix.
+            confusionMatrix:
+              type: object
+              description: Mapping from actual class to predicted class to count. Only present when accuracy percentage is present.
+
+    SplitterMetrics:
+      type: object
+      description: Metrics specific to splitter processors
+      allOf:
+        - $ref: "#/components/schemas/BaseMetrics"
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [SPLITTER]
+              description: The type of metrics. Will always be `"SPLITTER"` for splitter processors.
+            precisionPerc:
+              type: number
+              description: Number of predicted subdocuments that are in the expected set of subdocuments divided by total number of predicted subdocuments.
+            recallPerc:
+              type: number
+              description: Number of expected subdocuments that are in the predicted set of subdocuments divided by total number of expected subdocuments.
+            numExpectedDocs:
+              type: number
+              description: The number of expected documents.
+            numPredictedDocs:
+              type: number
+              description: The number of predicted documents.
+            numCorrectDocs:
+              type: number
+              description: The number of correctly predicted documents.
+
+    WorkflowRunSummary:
+      type: object
+      required:
+        - id
+        - status
+        - workflowId
+        - workflowName
+        - workflowVersionId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: |
+            The ID of the workflow run.
+
+            Example: `"workflow_run_Zk9mNP12Qw4-yTv8BdR3H"`
+        status:
+          $ref: "#/components/schemas/WorkflowStatus"
+        initialRunAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow was initially created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+        reviewedByUser:
+          type: string
+          description: |
+            The user of the person who reviewed the workflow run. Will not be included if the workflow run has not been reviewed.
+
+            Example: `"jane.doe@example.com"`
+        reviewedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow run was reviewed. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+        startTime:
+          type: string
+          format: date-time
+          description: |
+            The start time (in UTC) that the workflow actually started executing. This occurs after the `initialRunAt` time. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+        endTime:
+          type: string
+          format: date-time
+          description: |
+            The end time (in UTC) that the workflow finished. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:35:00Z"`
+        workflowId:
+          type: string
+          description: |
+            The ID of the workflow that was run. Will always start with "workflow".
+
+            Example: `"workflow_BMdfq_yWM3sT-ZzvCnA3f"`
+        workflowName:
+          type: string
+          description: |
+            The name of the workflow that was run.
+
+            Example: `"Invoice Processing"`
+        workflowVersionId:
+          type: string
+          description: |
+            The ID of the workflow version that was run. Will always start with "workflow_version".
+
+            Example: `"workflow_version_Zk9mNP12Qw4-yTv8BdR3H"`
+        batchId:
+          type: string
+          description: |
+            The batch ID of the WorkflowRun. If that WorkflowRun was created from a batch of files, all runs in that batch will have the same batch ID.
+
+            Example: `"batch_7Ws31-F5"`
+        rejectionNote:
+          type: string
+          description: |
+            The note that was added when the workflow run was rejected.
+
+            Example: `"Invalid invoice format"`
+        createdAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow run was created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:29:55Z"`
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the workflow run was last updated. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+
+    ParseError:
+      type: object
+      properties:
+        code:
+          type: string
+          enum:
+            [
+              INVALID_CONFIG_OPTIONS,
+              UNABLE_TO_DOWNLOAD_FILE,
+              FILE_TYPE_NOT_SUPPORTED,
+              FILE_SIZE_TOO_LARGE,
+              CORRUPT_FILE,
+              OCR_ERROR,
+              PASSWORD_PROTECTED_FILE,
+              FAILED_TO_CONVERT_TO_PDF,
+              FAILED_TO_GENERATE_TARGET_FORMAT,
+              INTERNAL_ERROR,
+            ]
+        message:
+          type: string
+        requestId:
+          type: string
+        retryable:
+          type: boolean
+
+    WebhookEvent:
+      type: object
+      x-fern-webhook: true
+      required:
+        - eventId
+        - eventType
+        - payload
+      properties:
+        eventId:
+          type: string
+          description: Unique identifier for the event
+        eventType:
+          type: string
+          description: Type of the event that occurred
+          enum:
+            # Workflow specific events
+            - workflow_run.completed
+            - workflow_run.failed
+            - workflow_run.needs_review
+            - workflow_run.rejected
+            - workflow_run.step_run.processed
+            # Processor run specific events
+            - processor_run.processed
+            - processor_run.failed
+            # Global events
+            - workflow.created
+            - workflow.deployed
+            - workflow.deleted
+            - processor.created
+            - processor.updated
+            - processor.deleted
+            - processor.draft.updated
+            - processor.version.published
+        payload:
+          type: object
+          description: Contains the relevant object for the event type
+          oneOf:
+            - $ref: "#/components/schemas/WorkflowRun"
+            - $ref: "#/components/schemas/ProcessorRun"
+            - $ref: "#/components/schemas/Workflow"
+            - $ref: "#/components/schemas/Processor"
+            - $ref: "#/components/schemas/ProcessorVersion"
+
+    WebhookEventWorkflowRun:
+      type: object
+      x-fern-webhook: true
+      description: Webhook event for workflow run related events
+      allOf:
+        - $ref: "#/components/schemas/WebhookEvent"
+        - type: object
+          properties:
+            eventType:
+              type: string
+              enum:
+                - workflow_run.completed
+                - workflow_run.failed
+                - workflow_run.needs_review
+                - workflow_run.rejected
+                - workflow_run.step_run.processed
+            payload:
+              $ref: "#/components/schemas/WorkflowRun"
+
+    WebhookEventProcessorRun:
+      type: object
+      x-fern-webhook: true
+      description: Webhook event for processor run related events
+      allOf:
+        - $ref: "#/components/schemas/WebhookEvent"
+        - type: object
+          properties:
+            eventType:
+              type: string
+              enum:
+                - processor_run.processed
+                - processor_run.failed
+            payload:
+              $ref: "#/components/schemas/ProcessorRun"
+
+    WebhookEventWorkflow:
+      type: object
+      x-fern-webhook: true
+      description: Webhook event for workflow related events
+      allOf:
+        - $ref: "#/components/schemas/WebhookEvent"
+        - type: object
+          properties:
+            eventType:
+              type: string
+              enum:
+                - workflow.created
+                - workflow.deployed
+                - workflow.deleted
+            payload:
+              $ref: "#/components/schemas/Workflow"
+
+    WebhookEventProcessor:
+      type: object
+      x-fern-webhook: true
+      description: Webhook event for processor related events
+      allOf:
+        - $ref: "#/components/schemas/WebhookEvent"
+        - type: object
+          properties:
+            eventType:
+              type: string
+              enum:
+                - processor.created
+                - processor.updated
+                - processor.deleted
+                - processor.draft.updated
+            payload:
+              $ref: "#/components/schemas/Processor"
+
+    WebhookEventProcessorVersion:
+      type: object
+      x-fern-webhook: true
+      description: Webhook event for processor version related events
+      allOf:
+        - $ref: "#/components/schemas/WebhookEvent"
+        - type: object
+          properties:
+            eventType:
+              type: string
+              enum:
+                - processor.version.published
+            payload:
+              $ref: "#/components/schemas/ProcessorVersion"
+
+    ApiVersionEnum:
+      type: string
+      enum:
+        - 2025-04-21
+        - 2024-12-23
+        - 2024-11-14
+        - 2024-07-30
+        - 2024-02-01
+
+    ProcessorId:
+      type: string
+      description: |
+        The ID of the processor to be run.
+
+        Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+      example: processor_id_here
+
+    SortByEnum:
+      type: string
+      enum: [updatedAt, createdAt]
+      default: updatedAt
+
+    SortDirEnum:
+      type: string
+      enum: [asc, desc]
+      default: desc
+
+    NextPageToken:
+      type: string
+      description: |
+        The token used to fetch the page of results from a previous request. We use cursor based pagination and will return a `nextPageToken` in the response if there are more results.
+
+        Note that if other parameters are changed in subsequent requests, you may receive inconsistent data.
+
+        example: `"xK9mLPqRtN3vS8wF5hB2cQ==:zWvUxYjM4nKpL7aDgE9HbTcR2mAyX3/Q+CNkfBSw1dZ="`
+      example: "xK9mLPqRtN3vS8wF5hB2cQ==:zWvUxYjM4nKpL7aDgE9HbTcR2mAyX3/Q+CNkfBSw1dZ="
+
+    MaxPageSize:
+      type: integer
+      default: 10
+      minimum: 1
+      maximum: 1000
+      description: The maximum number of results to return in the response. You may receive less than this number if there are fewer results than the maximum.
+
+    ProcessorType:
+      type: string
+      enum: [EXTRACT, CLASSIFY, SPLITTER]
+      description: |
+        The type of processor:
+        * `"EXTRACT"` - Extracts structured data from documents
+        * `"CLASSIFY"` - Classifies documents into categories
+        * `"SPLITTER"` - Splits documents into multiple parts
+
+    File: # This schema describes the File object returned by the API, not used for input
+      type: object
+      required:
+        - object
+        - id
+        - createdAt
+        - updatedAt
+        - name
+        - metadata
+      properties:
+        object:
+          type: string
+          description: |
+            The type of response. In this case, it will always be "file".
+          example: "file"
+        id:
+          type: string
+          description: |
+            Extend's internal ID for the file. It will always start with `"file_"`.
+
+            Example: `"file_xK9mLPqRtN3vS8wF5hB2cQ"`
+          example: "file_xK9mLPqRtN3vS8wF5hB2cQ"
+        name:
+          type: string
+          description: |
+            The name of the file
+
+            Example: `"Invoices.pdf"`
+          example: "Invoices.pdf"
+        type:
+          type: string
+          description: The type of the file
+          enum: [PDF, CSV, IMG, TXT, DOCX, EXCEL, XML, HTML]
+          example: "PDF"
+        presignedUrl:
+          type: string
+          description: A presigned URL to download the file. Expires after 15 minutes.
+          example: https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
+        parentFileId:
+          type: string
+          description: |
+            The ID of the parent file. Only included if this file is a derivative of another file, for instance if it was created via a Splitter in a workflow.
+          example: "file_Zk9mNP12Qw4yTv8BdR3H"
+        contents:
+          type: object
+          properties:
+            rawText:
+              type: string
+              description: |
+                The raw text content of the file. This is included for all file types if the `rawText` query parameter is set to true in the endpoint request.
+            markdown:
+              type: string
+              description: |
+                Cleaned and structured markdown content of the entire file. Available for PDF and IMG file types. Only included if the `markdown` query parameter is set to true in the endpoint request.
+            pages:
+              type: array
+              items:
+                type: object
+                required:
+                  - pageNumber
+                properties:
+                  pageNumber:
+                    type: integer
+                    description: The page number of this page in the document.
+                    example: 1
+                  pageHeight:
+                    type: number
+                    example: 10
+                  pageWidth:
+                    type: number
+                    example: 10
+                  rawText:
+                    type: string
+                    description: The raw text content extracted from this page.
+                    example: "This is the raw text of the page."
+                  markdown:
+                    type: string
+                    description: Cleaned and structured markdown content of this page.
+                    example: "# Heading\n\nThis is a paragraph with **bold** and *italic* text.\n\n- List item 1\n- List item 2\n\n> This is a blockquote"
+                  html:
+                    type: string
+                    description: |
+                      Cleaned and structured html content of the page. Available for DOCX file types (that were not auto-converted to PDFs). Only included if the `html` query parameter is set to true in the endpoint request.
+                    example: "<div>This is the html of the page.</div>"
+            sheets:
+              type: array
+              items:
+                type: object
+                required:
+                  - sheetName
+                properties:
+                  sheetName:
+                    type: string
+                    description: The name of the sheet.
+                    example: "Sheet1"
+                  rawText:
+                    type: string
+                    description: The raw text content of the sheet.
+                    example: "This is the raw text of the sheet."
+        metadata:
+          type: object
+          properties:
+            pageCount:
+              type: number
+              description: The number of pages in the file. This is only set for PDF/DOCX files.
+              example: 30
+            parentSplit:
+              type: object
+              description: The split metadata details. Only included if this file is a derivative of another file, for instance if it was created via a Splitter in a workflow.
+              properties:
+                id:
+                  type: string
+                  description: The ID of the split.
+                type:
+                  type: string
+                  description: The type of the split.
+                  example: "Invoice"
+                identifier:
+                  type: string
+                  description: The identifier of the split.
+                  example: "other_2_9"
+                startPage:
+                  type: integer
+                  description: The start page of the split.
+                  example: 1
+                endPage:
+                  type: integer
+                  description: The end page of the split.
+                  example: 10
+              required:
+                - id
+                - type
+                - identifier
+                - startPage
+                - endPage
+        createdAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the file was created. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T15:30:00Z"`
+          example: "2024-03-21T15:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: |
+            The time (in UTC) at which the file was last updated. Will follow the RFC 3339 format.
+
+            Example: `"2024-03-21T16:45:00Z"`
+          example: "2024-03-21T16:45:00Z"
+
+    WorkflowRunFileInput:
+      type: object
+      description: |
+        A file object that can be specified using either a URL or an existing file ID for workflow runs.
+      properties:
+        fileName:
+          type: string
+          description: The name of the file to be processed. If not provided, the file name will be inferred from the URL. It is highly recommended to include this parameter for legibility.
+          example: "myFirstFile.pdf"
+        fileUrl:
+          type: string
+          description: |
+            A URL where the file can be downloaded from. If you use presigned URLs, we recommend an expiration time of 5-15 minutes. One of a `fileUrl` or `fileId` must be provided.
+          example: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+        fileId:
+          type: string
+          description: |
+            Extend's internal ID for the file. It will always start with "file_". One of a `fileUrl` or `fileId` must be provided. You can view a file ID from the Extend UI, for instance from running a parser or from a previous file creation. If you provide a `fileId`, any parsed data will be reused.
+
+            Example: `"file_Zk9mNP12Qw4yTv8BdR3H"`
+          example: "file_Zk9mNP12Qw4yTv8BdR3H"
+        outputs:
+          type: array
+          description: |
+            Predetermined outputs that can be used to override the outputs that are generated. Generally not recommended for most use cases, however, can be useful in cases of overriding a classification in a workflow, or a subset of extraction fields when data is known.
+          items:
+            type: object
+            required:
+              - processorId
+              - output
+            properties:
+              processorId:
+                type: string
+                description: |
+                  The ID of the processor that the output is associated with.
+                  Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+              output:
+                $ref: "#/components/schemas/ProvidedProcessorOutput"
+                description: |
+                  The output that is being overridden. The structure will depend on the processor type. More details can be found [here](https://docs.extend.ai/2025-04-21/developers/guides/output-types).
+
+    ProcessorRunFileInput:
+      type: object
+      description: Input file for running a single processor.
+      properties:
+        fileName:
+          type: string
+          description: The name of the file to be processed. If not provided, the file name will be inferred from the URL. It is highly recommended to include this parameter for legibility.
+          example: "myFirstFile.pdf"
+        fileUrl:
+          type: string
+          description: A URL where the file can be downloaded from. If you use presigned URLs, we recommend an expiration time of 5-15 minutes. One of a `fileUrl` or `fileId` must be provided.
+          example: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+        fileId:
+          type: string
+          description: |
+            Extend's internal ID for the file. It will always start with `file_`. One of a `fileUrl` or `fileId` must be provided. You can view a file ID from the Extend UI, for instance from running a parser or from a previous file creation. If you provide a `fileId`, any parsed data will be reused.
+          example: "file_Zk9mNP12Qw4yTv8BdR3H"
+
+    BatchWorkflowRunFileInput:
+      type: object
+      description: Input file for batch workflow runs.
+      properties:
+        fileName:
+          type: string
+          description: The name to associate with the file. If not provided when using `fileUrl`, the name may be inferred from the URL. This param is only for your reference, and will be rendered in our dashboard, it is not used by the workflow.
+          example: "myFirstFile.pdf"
+        fileUrl:
+          type: string
+          description: A URL where the file can be downloaded from. If you use presigned URLs, we suggest a slightly longer expiration time, ideally 30 minutes for a worst case scenario. One of a `fileUrl` or `fileId` must be provided.
+          example: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+        fileId:
+          type: string
+          description: |
+            Extend's internal ID for the file. It will always start with `file_`. One of a `fileUrl` or `fileId` must be provided. You can view a file ID from the Extend UI, for instance from running a parser or from a previous file creation. If you provide a `fileId`, any parsed data will be reused.
+
+            Example: `"file_Zk9mNP12Qw4yTv8BdR3H"`
+          example: "file_Zk9mNP12Qw4yTv8BdR3H"
+
+    ClassificationConfig:
+      type: object
+      required:
+        - type
+        - classifications
+      properties:
+        type:
+          type: string
+          enum: [CLASSIFY]
+          description: The type of configuration. Must be `"CLASSIFY"` for classification processors.
+        baseProcessor:
+          type: string
+          enum: [classifier_performance, classifier_light]
+          description: |
+            The base processor to use. For classifiers, this must be either `"classifier_performance"` or `"classifier_light"`. See the [base processor documentation](https://docs.extend.ai/2025-04-21/changelog/overview) for more details.
+          default: "classifier_performance"
+        baseVersion:
+          type: string
+          example: "3.2.0"
+          description: The version of the `"classifier_performance"` or `"classifier_light"` processor to use. If this is provided, the `baseProcessor` must also be provided. See the [base processor documentation](https://docs.extend.ai/2025-04-21/changelog/overview) for more details.
+        classifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Classification"
+          description: Array of possible classifications for the document.
+        classificationRules:
+          type: string
+          example: "Rememeber, when it comes to differentiating between invoices and purchase orders, the most important thing to look for is the date of the document."
+          description: Custom rules to guide the classification process in natural language.
+        advancedOptions:
+          $ref: "#/components/schemas/ClassificationAdvancedOptions"
+          description: Advanced configuration options.
+
+    Classification:
+      type: object
+      required:
+        - id
+        - type
+        - description
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the classification. We recommend lowercase, underscore-separated format.
+          example: "my_unique_id"
+        type:
+          type: string
+          description: Type identifier for the classification.
+          example: "invoice"
+        description:
+          type: string
+          description: A detailed description of the classification.
+          example: "An invoice is a document that lists the items purchased and the total amount due."
+    ClassificationAdvancedOptions:
+      type: object
+      properties:
+        context:
+          type: string
+          enum: [default, max]
+          description: The context to use for classification.
+          default: default
+        advancedMultimodalEnabled:
+          type: boolean
+          description: Enable advanced multimodal processing for better handling of visual elements during classification.
+          default: false
+        fixedPageLimit:
+          type: integer
+          description: Limit processing to a specific number of pages from the beginning of the document.
+          example: 10
+
+    ExtractionConfig:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [EXTRACT]
+          description: The type of configuration. Must be "EXTRACT" for extraction processors.
+        baseProcessor:
+          type: string
+          enum: [extraction_performance, extraction_light]
+          description: |
+            The base processor to use. For extractors, this must be either `"extraction_performance"` or `"extraction_light"`. See the [base processor documentation](https://docs.extend.ai/2025-04-21/changelog/overview) for more details.
+          default: "extraction_performance"
+        baseVersion:
+          type: string
+          description: The version of the `"extraction_performance"` or `"extraction_light"` processor to use. If this is provided, the `baseProcessor` must also be provided. See the [base processor documentation](https://docs.extend.ai/2025-04-21/changelog/overview) for more details.
+        extractionRules:
+          type: string
+          description: Custom rules to guide the extraction process in natural language.
+        schema:
+          "$ref": "#/components/schemas/JsonObject"
+          description: |
+            JSON Schema definition of the data to extract. Either `fields` or `schema` must be provided.
+
+            See the [schema documentation](https://docs.extend.ai/2025-04-21/developers/guides/processor-configs#json-schema-structure-schema) for details and examples of schema configuration.
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractionField"
+          description: |
+            Array of fields to extract from the document. Either `fields` or `schema` must be provided.
+
+            We recommend using `schema` for new implementations.
+          deprecated: true
+        advancedOptions:
+          $ref: "#/components/schemas/ExtractionAdvancedOptions"
+          description: Advanced configuration options.
+
+    ExtractionAdvancedOptions:
+      type: object
+      properties:
+        documentKind:
+          type: string
+          description: The kind of document being processed.
+        keyDefinitions:
+          type: string
+          description: Custom key definitions for extraction.
+        modelReasoningInsightsEnabled:
+          type: boolean
+          description: Whether to enable model reasoning insights.
+        advancedMultimodalEnabled:
+          type: boolean
+          description: Whether to enable advanced multimodal features.
+        citationsEnabled:
+          type: boolean
+          description: Whether to enable citations in the output.
+        autoReviewAssistantEnabled:
+          type: boolean
+          description: Whether to enable the auto-review assistant.
+        advancedFigureParsingEnabled:
+          type: boolean
+          description: Whether to enable advanced figure parsing.
+        chunkingOptions:
+          $ref: "#/components/schemas/ExtractChunkingOptions"
+        fixedPageLimit:
+          type: integer
+          description: Optional fixed limit on the number of pages to process.
+
+    ExtractChunkingOptions:
+      type: object
+      properties:
+        chunkingStrategy:
+          type: string
+          enum: [standard, semantic]
+          description: The strategy to use for chunking the document.
+        pageChunkSize:
+          type: integer
+          description: The size of page chunks.
+        chunkSelectionStrategy:
+          type: string
+          enum: [intelligent, confidence, take_first, take_last]
+          description: The strategy to use for selecting chunks.
+        customSemanticChunkingRules:
+          type: string
+          description: Custom rules for semantic chunking.
+
+    ExtractionField:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - description
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the field.
+        name:
+          type: string
+          description: Human-readable name for the field.
+        type:
+          type: string
+          enum:
+            [
+              string,
+              number,
+              currency,
+              boolean,
+              date,
+              array,
+              enum,
+              object,
+              signature,
+            ]
+          description: The type of the field.
+        description:
+          type: string
+          description: Detailed description of the field, including expected content and format.
+        schema:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractionField"
+          description: Required when type is "array" or "object". Contains nested field definitions.
+        enum:
+          type: array
+          items:
+            $ref: "#/components/schemas/Enum"
+          description: Required when type is "enum". List of allowed values.
+
+    Enum:
+      type: object
+      required:
+        - value
+        - description
+      properties:
+        value:
+          type: string
+          description: The value of the enum option.
+        description:
+          type: string
+          description: Description of what this enum value represents.
+
+    SplitterConfig:
+      type: object
+      required:
+        - type
+        - splitClassifications
+      properties:
+        type:
+          type: string
+          enum: [SPLITTER]
+          description: The type of configuration. Must be "SPLITTER" for splitter processors.
+        baseProcessor:
+          type: string
+          enum: [splitting_performance]
+          description: |
+            The base processor to use. For splitters, this can currently only be `"splitting_performance"`. See the [base processor documentation](https://docs.extend.ai/2025-04-21/changelog/overview) for more details.
+          default: "splitting_performance"
+        baseVersion:
+          type: string
+          description: The version of the `"splitting_performance"` processor to use. If this is provided, the `baseProcessor` must also be provided. See the [base processor documentation](https://docs.extend.ai/2025-04-21/changelog/overview) for more details.
+        splitClassifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Classification"
+          description: Array of classifications that define the possible types of document sections.
+        splitRules:
+          type: string
+          description: Custom rules to guide the document splitting process in natural language.
+        advancedOptions:
+          $ref: "#/components/schemas/SplitterAdvancedOptions"
+          description: Advanced configuration options.
+
+    SplitterAdvancedOptions:
+      type: object
+      properties:
+        splitIdentifierRules:
+          type: string
+          description: Custom rules for identifying split points.
+        splitMethod:
+          type: string
+          enum: [high_precision, low_latency]
+          description: The method to use for splitting documents. `high_precision` is more accurate but slower, while `low_latency` is faster but less precise.
+          default: high_precision
+        splitExcelDocumentsBySheetEnabled:
+          type: boolean
+          description: For Excel documents, split by worksheet.
+          default: false
+        fixedPageLimit:
+          type: integer
+          description: Limit processing to a specific number of pages from the beginning of the document.
+
+    ProvidedSplitterOutput:
+      type: object
+      required:
+        - splits
+      properties:
+        splits:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - classificationId
+              - type
+              - startPage
+              - endPage
+            properties:
+              id:
+                type: string
+                description: Unique ID for this split
+              classificationId:
+                type: string
+                description: ID of the classification type (set in the processor config)
+              type:
+                type: string
+                description: The type of the split document (set in the processor config), corresponds to the classificationId
+              observation:
+                type: string
+                description: Explanation of the results
+              identifier:
+                type: string
+                description: Identifier for the split document (e.g. invoice number)
+              startPage:
+                type: integer
+                description: The start page of the split document
+              endPage:
+                type: integer
+                description: The end page of the split document
+
+    SplitterOutput:
+      type: object
+      required:
+        - splits
+      properties:
+        splits:
+          type: array
+          items:
+            type: object
+            required:
+              - type
+              - observation
+              - identifier
+              - startPage
+              - endPage
+              - classificationId
+              - id
+              - fileId
+            properties:
+              type:
+                type: string
+                description: The type of the split document (set in the processor config), corresponds to the classificationId
+              observation:
+                type: string
+                description: Explanation of the results
+              identifier:
+                type: string
+                description: Identifier for the split document (e.g. invoice number)
+              startPage:
+                type: integer
+                description: The start page of the split document
+              endPage:
+                type: integer
+                description: The end page of the split document
+              name:
+                type: string
+                description: Optional name for the split
+              classificationId:
+                type: string
+                description: ID of the classification type (set in the processor config)
+              id:
+                type: string
+                description: Unique ID for this split
+              fileId:
+                type: string
+                description: File ID associated with this split
+        isExternal:
+          type: boolean
+
+    ProvidedClassifierOutput:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+          description: The unique identifier for this classification
+        type:
+          type: string
+          description: The type of classification
+        confidence:
+          type: number
+          description: A value between 0 and 1 indicating the model's confidence in the classification, where 1 represents maximum confidence
+          default: 1
+
+    ClassifierOutput:
+      type: object
+      required:
+        - id
+        - type
+        - confidence
+        - insights
+      properties:
+        id:
+          type: string
+          description: The unique identifier for this classification
+        type:
+          type: string
+          description: The type of classification
+        confidence:
+          type: number
+          description: A value between 0 and 1 indicating the model's confidence in the classification, where 1 represents maximum confidence
+        insights:
+          type: array
+          description: Additional insights about the classification decision
+          items:
+            $ref: "#/components/schemas/Insight"
+
+    ProvidedExtractionFieldResult:
+      type: object
+      required:
+        - id
+        - value
+      properties:
+        id:
+          type: string
+          description: The unique identifier for this field
+        value:
+          x-fern-type: unknown
+          description: The extracted value. More details can be found [here](https://docs.extend.ai/2025-04-21/developers/guides/output-types#extraction-output-type-fields-array).
+        type:
+          type: string
+          enum:
+            [
+              string,
+              number,
+              currency,
+              boolean,
+              date,
+              array,
+              enum,
+              object,
+              signature,
+            ]
+          description: The type of the extraction field result
+        confidence:
+          type: number
+          description: A value between 0 and 1 indicating confidence in the extraction. Will be set to 1 if not provided.
+          default: 1
+        page:
+          type: number
+          nullable: true
+          description: The page number where this field was extracted from
+
+    ProvidedFieldsArrayOutput:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/ProvidedExtractionFieldResult"
+      description: A mapping of field names to their extracted values
+    ProvidedExtractionOutput:
+      type: object
+      oneOf:
+        - $ref: "#/components/schemas/ProvidedJsonOutput"
+        - $ref: "#/components/schemas/ProvidedFieldsArrayOutput"
+
+    ProvidedJsonOutput:
+      type: object
+      description: The output from a JSON Schema processor
+      required:
+        - value
+      properties:
+        value:
+          type: object
+          additionalProperties:
+            x-fern-type: unknown
+
+    ExtractionOutput:
+      type: object
+      description: The output from an extraction processor
+      oneOf:
+        - $ref: "#/components/schemas/JsonOutput"
+        - $ref: "#/components/schemas/FieldsArrayOutput"
+
+    JsonOutput:
+      type: object
+      required:
+        - value
+        - metadata
+      properties:
+        value:
+          "$ref": "#/components/schemas/JsonObject"
+          description: The extracted values conforming to the schema defined in the processor config
+        metadata:
+          # "$ref": "#/components/schemas/OutputMetadata"
+          description: Metadata about the extracted fields
+          additionalProperties:
+            type: object
+            required:
+              - logprobsConfidence
+            properties:
+              ocrConfidence:
+                type: number
+                nullable: true
+                description: Confidence score from OCR processing, if applicable
+              logprobsConfidence:
+                type: number
+                nullable: true
+                description: Confidence score based on model logprobs
+              citations:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    page:
+                      type: number
+                      description: Page number where the citation was found
+                    referenceText:
+                      type: string
+                      nullable: true
+                      description: The text that was referenced
+                    polygon:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - x
+                          - y
+                        properties:
+                          x:
+                            type: number
+                            description: X coordinate of the point
+                          y:
+                            type: number
+                            description: Y coordinate of the point
+                      description: Array of points defining the polygon around the referenced text
+              insights:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - type
+                    - content
+                  properties:
+                    type:
+                      type: string
+                      enum: [reasoning]
+                      description: The type of insight
+                    content:
+                      type: string
+                      description: The content of the insight
+
+    OutputMetadata:
+      type: object
+      additionalProperties:
+        type: object
+        required:
+          - logprobsConfidence
+        properties:
+          ocrConfidence:
+            type: number
+            nullable: true
+            description: Confidence score from OCR processing, if applicable
+          logprobsConfidence:
+            type: number
+            nullable: true
+            description: Confidence score based on model logprobs
+          citations:
+            type: array
+            items:
+              $ref: "#/components/schemas/Citation"
+          insights:
+            type: array
+            items:
+              $ref: "#/components/schemas/Insight"
+
+    Citation:
+      type: object
+      properties:
+        page:
+          type: number
+          description: Page number where the citation was found
+        referenceText:
+          type: string
+          nullable: true
+          description: The text that was referenced
+        polygon:
+          type: array
+          items:
+            $ref: "#/components/schemas/Polygon"
+          description: Array of points defining the polygon
+
+    Polygon:
+      type: object
+      required:
+        - x
+        - y
+      properties:
+        x:
+          type: number
+          description: X coordinate of the point
+        y:
+          type: number
+          description: Y coordinate of the point
+
+    FieldsArrayOutput:
+      type: object
+      description: The output from an extraction processor
+      additionalProperties:
+        $ref: "#/components/schemas/ExtractionFieldResult"
+
+    ExtractionFieldResult:
+      type: object
+      required:
+        - id
+        - type
+        - value
+        - references
+      properties:
+        id:
+          type: string
+          description: The unique identifier for this field
+        type:
+          type: string
+          enum:
+            [
+              string,
+              number,
+              currency,
+              boolean,
+              date,
+              enum,
+              array,
+              object,
+              signature,
+            ]
+          description: The type of the extracted field
+        value:
+          description: The extracted value, type depends on the field type. More details can be found [here](https://docs.extend.ai/2025-04-21/developers/guides/output-types#extraction-output-type-fields-array).
+          x-fern-type: unknown
+        confidence:
+          type: number
+          description: A value between 0 and 1 indicating confidence in the extraction
+        schema:
+          type: array
+          description: The field schema of nested fields
+          items:
+            $ref: "#/components/schemas/ExtractionField"
+        insights:
+          type: array
+          description: Reasoning and other insights from the model
+          items:
+            $ref: "#/components/schemas/Insight"
+        references:
+          type: array
+          description: References for the extracted field
+          items:
+            $ref: "#/components/schemas/ExtractionFieldResultReference"
+        enum:
+          type: array
+          description: The enum options for enum fields, only set when type=enum
+          items:
+            $ref: "#/components/schemas/EnumOption"
+
+    # FieldsArrayOutputValue:
+    #   description: The extracted value, type depends on the field type
+    #   oneOf:
+    #     - $ref: "#/components/schemas/String"
+    #     - $ref: "#/components/schemas/Number"
+    #     - $ref: "#/components/schemas/Boolean"
+    #     - $ref: "#/components/schemas/Array"
+    #     - $ref: "#/components/schemas/Object"
+    #     - $ref: "#/components/schemas/Currency"
+    #     - $ref: "#/components/schemas/Signature"
+
+    # String:
+    #   type: string
+    #   nullable: true
+
+    # Number:
+    #   type: number
+    #   nullable: true
+
+    # Boolean:
+    #   type: boolean
+    #   nullable: true
+
+    # Array:
+    #   type: array
+    #   items:
+    #     $ref: "#/components/schemas/Object"
+
+    # Object:
+    #   type: object
+    #   additionalProperties:
+    #     x-fern-type: unknown
+
+    # Currency:
+    #   type: object
+    #   nullable: true
+    #   required:
+    #     - amount
+    #     - iso_4217_currency_code
+    #   properties:
+    #     amount:
+    #       type: number
+    #       description: The currency amount
+    #     iso_4217_currency_code:
+    #       type: string
+    #       description: The ISO 4217 currency code (e.g. USD, EUR)
+
+    # Signature:
+    #   type: object
+    #   nullable: true
+    #   required:
+    #     - printed_name
+    #     - signature_date
+    #     - is_signed
+    #     - title_or_role
+    #   properties:
+    #     printed_name:
+    #       type: string
+    #       nullable: true
+    #       description: The printed name associated with the signature
+    #     signature_date:
+    #       type: string
+    #       nullable: true
+    #       description: The date of the signature
+    #     is_signed:
+    #       type: boolean
+    #       nullable: true
+    #       description: Whether the document is signed
+    #     title_or_role:
+    #       type: string
+    #       nullable: true
+    #       description: The title or role of the signer
+
+    EnumOption:
+      type: object
+      required:
+        - value
+        - description
+      properties:
+        value:
+          type: string
+          description: The enum value (e.g. "ANNUAL", "MONTHLY", etc.)
+        description:
+          type: string
+          description: The description of the enum value
+
+    ExtractionFieldResultReference:
+      type: object
+      required:
+        - id
+        - fieldName
+        - page
+        - boundingBoxes
+      properties:
+        id:
+          type: string
+          description: The unique identifier for this field
+        fieldName:
+          type: string
+          description: The name of the extracted field
+        page:
+          type: number
+          description: The page number that this bounding box is from
+        boundingBoxes:
+          type: array
+          description: The bounding boxes of the field
+          items:
+            type: object
+            required:
+              - top
+              - left
+              - bottom
+              - right
+            properties:
+              top:
+                type: number
+                description: The top coordinate of the bounding box
+              left:
+                type: number
+                description: The left coordinate of the bounding box
+              bottom:
+                type: number
+                description: The bottom coordinate of the bounding box
+              right:
+                type: number
+                description: The right coordinate of the bounding box
+
+    Insight:
+      type: object
+      required:
+        - type
+        - content
+      properties:
+        type:
+          type: string
+          enum: [reasoning]
+          description: The type of insight. Will always be `"reasoning"` for now.
+        content:
+          type: string
+          description: The content of the reasoning insight.
+
+    ProvidedProcessorOutput:
+      type: object
+      oneOf:
+        - $ref: "#/components/schemas/ProvidedExtractionOutput"
+        - $ref: "#/components/schemas/ProvidedClassifierOutput"
+        - $ref: "#/components/schemas/ProvidedSplitterOutput"
+
+    ProcessorOutput:
+      type: object
+      description: The output from a processor run. The type of output will match the processor type.
+      oneOf:
+        - $ref: "#/components/schemas/ExtractionOutput"
+        - $ref: "#/components/schemas/ClassifierOutput"
+        - $ref: "#/components/schemas/SplitterOutput"
+
+    ParseConfig:
+      type: object
+      description: Configuration options for the parsing process.
+      properties:
+        target:
+          type: string
+          enum: [markdown, spatial]
+          default: markdown
+          description: |
+            The target format for the parsed content. Supported values:
+
+            * `markdown`: Convert document to Markdown format
+            * `spatial`: Preserve spatial information in the output
+        chunkingStrategy:
+          type: object
+          description: Strategy for dividing the document into chunks.
+          required:
+          properties:
+            type:
+              type: string
+              enum: [page, document, section]
+              default: page
+              description: |
+                The type of chunking strategy. Supported values:
+
+                * `page`: Chunk document by pages.
+                * `document`: Entire document is a single chunk. Essentially no chunking.
+                * `section`: Split by logical sections. Not supported for target=spatial.
+            minCharacters:
+              type: integer
+              description: Specify a minimum number of characters per chunk.
+              example: 100
+            maxCharacters:
+              type: integer
+              description: Specify a maximum number of characters per chunk.
+              example: 1000
+        blockOptions:
+          type: object
+          description: Options for controlling how different block types are processed.
+          properties:
+            figures:
+              type: object
+              description: Options for figure blocks.
+              properties:
+                enabled:
+                  type: boolean
+                  default: true
+                  description: Whether to include figures in the output.
+                figureImageClippingEnabled:
+                  type: boolean
+                  default: true
+                  description: Whether to clip and extract images from figures.
+            tables:
+              type: object
+              description: Options for table blocks.
+              properties:
+                enabled:
+                  type: boolean
+                  default: true
+                  description: Whether to include tables in the output.
+                targetFormat:
+                  type: string
+                  enum: [markdown, html]
+                  default: markdown
+                  description: |
+                    The target format for the table blocks. Supported values:
+                    * `markdown`: Convert table to Markdown format
+                    * `html`: Convert table to HTML format
+            text:
+              type: object
+              description: Options for text blocks.
+              properties:
+                signatureDetectionEnabled:
+                  type: boolean
+                  default: true
+                  description: Whether an additional vision model will be utilized for advanced signature detection. Recommended for most use cases, but should be disabled if signature detection is not necessary and latency is a concern.
+        advancedOptions:
+          type: object
+          properties:
+            pageRotationEnabled:
+              type: boolean
+              default: true
+              description: Whether to automatically detect and correct page rotation.
+
+paths:
+  /workflow_runs:
+    post:
+      x-fern-sdk-group-name: workflowRun
+      x-fern-sdk-method-name: create # client.workflowRun.create
+      tags:
+        - Workflow Endpoints
+      summary: Run Workflow
+      description: |
+        Run a Workflow with files. A Workflow is a sequence of steps that process files and data in a specific order to achieve a desired outcome. A WorkflowRun will be created for each file processed. A WorkflowRun represents a single execution of a workflow against a file.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - workflowId
+              properties:
+                workflowId:
+                  type: string
+                  description: |
+                    The ID of the workflow to run.
+
+                    Example: `"workflow_BMdfq_yWM3sT-ZzvCnA3f"`
+                  example: workflow_id_here
+                files:
+                  type: array
+                  description: |
+                    An array of files to process through the workflow. Either the `files` array or `rawTexts` array must be provided. Supported file types can be found [here](https://docs.extend.ai/2025-04-21/developers/guides/supported-file-types).
+                  items:
+                    $ref: "#/components/schemas/WorkflowRunFileInput"
+                rawTexts:
+                  type: array
+                  items:
+                    type: string
+                  description: |
+                    An array of raw strings. Can be used in place of files when passing raw data. The raw data will be converted to `.txt` files and run through the workflow. If the data follows a specific format, it is recommended to use the files parameter instead. Either `files` or `rawTexts` must be provided.
+                version:
+                  type: string
+                  example: "3"
+                  description: |
+                    An optional version of the workflow that files will be run through. This number can be found when viewing the workflow on the Extend platform. When a version number is not supplied, the most recent published version of the workflow will be used. If no published versions exist, the draft version will be used. To run the `"draft"` version of a workflow, use `"draft"` as the version.
+
+                    Examples:
+                    - `"3"` - Run version 3 of the workflow
+                    - `"draft"` - Run the draft version of the workflow
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 50
+                  description: An optional value used to determine the relative order of WorkflowRuns when rate limiting is in effect. Lower values will be prioritized before higher values.
+                metadata:
+                  "$ref": "#/components/schemas/JsonObject"
+                  description: |
+                    A optional metadata object that can be assigned to a specific WorkflowRun to help identify it. It will be returned in the response and webhooks. You can place any arbitrary `key : value` pairs in this object.
+      responses:
+        "200":
+          description: Successfully created workflow runs
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - workflowRuns
+                properties:
+                  success:
+                    type: boolean
+                  workflowRuns:
+                    description: An array of WorkflowRun objects, with each WorkflowRun corresponding to a single File that was passed in.
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkflowRun"
+              examples:
+                RunWorkflowResponse:
+                  summary: Example workflow runs created response
+                  value:
+                    success: true
+                    workflowRuns:
+                      - object: workflow_run
+                        id: workflow_run_TcgplCsALH1I-cvG93mWa
+                        name: "My Workflow Run"
+                        url: "https://dashboard.extend.ai/workflows/workflow_YH1ZEST4sxgUT7w84KBGa?workflowRunId=workflow_run_TcgplCsALH1I-cvG93mWa"
+                        status: PENDING
+                        metadata: {}
+                        batchId: batch_kCz2ht2a
+                        files:
+                          - object: file
+                            id: file_v8gqaWzgTnSyIMZfrlEba
+                            name: "My File"
+                            type: PDF
+                            presignedUrl: null
+                            parentFileId: null
+                            contents: null
+                            metadata:
+                              pageCount: null
+                              parentSplit: null
+                            createdAt: "2025-05-12T21:34:54.455000+00:00"
+                            updatedAt: "2025-05-12T21:34:54.483000+00:00"
+                        failureReason: null
+                        failureMessage: null
+                        initialRunAt: "2025-05-12T21:34:54.477000+00:00"
+                        reviewedBy: null
+                        reviewed: false
+                        rejectionNote: null
+                        reviewedAt: null
+                        startTime: null
+                        endTime: null
+                        outputs: []
+                        stepRuns: []
+                        workflow:
+                          object: workflow
+                          id: workflow_YH1ZEST4sxgUT7w84KBGa
+                          version: "1"
+                          name: "My Workflow"
+
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      x-fern-sdk-group-name: workflowRun
+      x-fern-sdk-method-name: list # client.workflowRun.list
+      tags:
+        - Workflow Endpoints
+      summary: List Workflow Runs
+      description: |
+        List runs of a Workflow. Workflows are sequences of steps that process files and data in a specific order to achieve a desired outcome. A WorkflowRun represents a single execution of a workflow against a file.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/WorkflowStatus"
+          description: |
+            Filters workflow runs by their status. If not provided, no filter is applied.
+
+             The status of a workflow run:
+             * `"PENDING"` - The workflow run has not started yet
+             * `"PROCESSING"` - The workflow run is in progress
+             * `"NEEDS_REVIEW"` - The workflow run requires manual review
+             * `"REJECTED"` - The workflow run was rejected during manual review
+             * `"PROCESSED"` - The workflow run completed successfully
+             * `"FAILED"` - The workflow run encountered an error
+          example: "PENDING"
+        - name: workflowId
+          in: query
+          schema:
+          type: string
+          description: |
+            Filters workflow runs by the workflow ID. If not provided, runs for all workflows are returned.
+
+            Example: `"workflow_BMdfq_yWM3sT-ZzvCnA3f"`
+        - name: fileNameContains
+          in: query
+          schema:
+          type: string
+          description: |
+            Filters workflow runs by the name of the file. Only returns workflow runs where the file name contains this string.
+
+            Example: `"invoice"`
+        - name: sortBy
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortByEnum"
+          description: Sorts the workflow runs by the given field.
+          example: "createdAt"
+        - name: sortDir
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortDirEnum"
+          description: Sorts the workflow runs in ascending or descending order. Ascending order means the earliest workflow run is returned first.
+          example: "asc"
+        - name: nextPageToken
+          in: query
+          schema:
+            $ref: "#/components/schemas/NextPageToken"
+        - name: maxPageSize
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaxPageSize"
+      responses:
+        "200":
+          description: |
+            You will get a list of summaries for each workflow run. These are shortened versions of the full WorkflowRun object.
+
+            To get the full object, use the [Get WorkflowRun](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/get-workflow-run) endpoint.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - workflowRuns
+                properties:
+                  success:
+                    type: boolean
+                  workflowRuns:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkflowRunSummary"
+                  nextPageToken:
+                    $ref: "#/components/schemas/NextPageToken"
+              examples:
+                ListWorkflowRunsSuccess:
+                  summary: Successful response with workflow runs
+                  value:
+                    success: true
+                    workflowRuns:
+                      [
+                        {
+                          id: "workflow_run_Zk9mNP12Qw4-yTv8BdR3H",
+                          status: "REJECTED",
+                          startTime: "2024-03-21T15:30:00Z",
+                          workflowId: "workflow_BMdfq_yWM3sT-ZzvCnA3f",
+                          workflowName: "Invoice Processing",
+                          workflowVersionId: "workflow_version_Zk9mNP12Qw4-yTv8BdR3H",
+                          createdAt: "2024-03-21T15:29:55Z",
+                          updatedAt: "2024-03-21T16:45:00Z",
+                          initialRunAt: "2024-03-21T15:30:00Z",
+                          reviewedByUser: "jane.doe@example.com",
+                          reviewedAt: "2024-03-21T16:45:00Z",
+                          endTime: "2024-03-21T15:35:00Z",
+                          batchId: "batch_7Ws31-F5",
+                          rejectionNote: "Invalid invoice format",
+                        },
+                      ]
+                    nextPageToken: "xK9mLPqRtN3vS8wF5hB2cQ==:zWvUxYjM4nKpL7aDgE9HbTcR2mAyX3/Q+CNkfBSw1dZ="
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+
+  /workflow_runs/{workflowRunId}:
+    get:
+      x-fern-sdk-group-name: workflowRun
+      x-fern-sdk-method-name: get # client.workflowRun.get
+      tags:
+        - Workflow Endpoints
+      summary: Get Workflow Run
+      description: Once a workflow has been run, you can check the status and output of a specific WorkflowRun.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: workflowRunId
+          in: path
+          required: true
+          schema:
+          type: string
+          description: |
+            The ID of the WorkflowRun that was outputted after a Workflow was run through the API.
+
+            Example: `"workflow_run_8k9m-xyzAB_Pqrst-Nvw4"`
+          example: workflow_run_id_here
+      responses:
+        "200":
+          description: Successfully retrieved workflow run
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - workflowRun
+                properties:
+                  success:
+                    type: boolean
+                  workflowRun:
+                    $ref: "#/components/schemas/WorkflowRun"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+    post:
+      x-fern-sdk-group-name: workflowRun
+      x-fern-sdk-method-name: update # client.workflowRun.update
+      tags:
+        - Workflow Endpoints
+      summary: Update Workflow Run
+      description: You can update the name and metadata of an in progress WorkflowRun at any time using this endpoint.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: workflowRunId
+          in: path
+          required: true
+          schema:
+          type: string
+          description: |
+            The ID of the WorkflowRun. This ID will start with "workflow_run". This ID can be found in the API response when creating a Workflow Run, or in the "history" tab of a workflow on the Extend platform.
+
+            Example: `"workflow_run_8k9m-xyzAB_Pqrst-Nvw4"`
+          example: workflow_run_id_here
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: An optional name that can be assigned to a specific WorkflowRun
+                metadata:
+                  "$ref": "#/components/schemas/JsonObject"
+                  description: |
+                    A metadata object that can be assigned to a specific WorkflowRun. If metadata already exists on this WorkflowRun, the newly incoming metadata will be merged with the existing metadata, with the incoming metadata taking field precedence.
+
+                    You can include any arbitrary `key : value` pairs in this object.
+      responses:
+        "200":
+          description: Successfully updated workflow run
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - workflowRun
+                properties:
+                  success:
+                    type: boolean
+                  workflowRun:
+                    $ref: "#/components/schemas/WorkflowRun"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /workflow_runs/batch:
+    post:
+      x-fern-sdk-group-name: batchWorkflowRun
+      x-fern-sdk-method-name: create # client.batchWorkflowRun.create
+      tags:
+        - Workflow Endpoints
+      summary: Batch Run Workflow
+      description: |
+        This endpoint allows you to efficiently initiate large batches of workflow runs in a single request (up to 1,000 in a single request, but you can queue up multiple batches in rapid succession). It accepts an array of inputs, each containing a file and metadata pair. The primary use case for this endpoint is for doing large bulk runs of >1000 files at a time that can process over the course of a few hours without needing to manage rate limits that would likely occur using the primary run endpoint.
+
+        Unlike the single [Run Workflow](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/run-workflow) endpoint which returns the details of the created workflow runs immediately, this batch endpoint returns a `batchId`.
+
+        Our recommended usage pattern is to integrate with [Webhooks](https://docs.extend.ai/2025-04-21/developers/webhooks/configuration) for consuming results, using the `metadata` and `batchId` to match up results to the original inputs in your downstream systems. However, you can integrate in a polling mechanism by using a combination of the [List Workflow Runs](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/list-workflow-runs) endpoint to fetch all runs via a batch, and then [Get Workflow Run](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/get-workflow-run) to fetch the full outputs each run.
+
+        **Processing and Monitoring:**
+        Upon successful submission, the endpoint returns a `batchId`. The individual workflow runs are then queued for processing.
+
+        - **Monitoring:** Track the progress and consume results of individual runs using [Webhooks](https://docs.extend.ai/2025-04-21/developers/webhooks/configuration). Subscribe to events like `workflow_run.completed`, `workflow_run.failed`, etc. The webhook payload for these events will include the corresponding `batchId` and the `metadata` you provided for each input.
+        - **Fetching Results:** You can also use the [List Workflow Runs](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/list-workflow-runs) endpoint and filter using the `batchId` query param.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - workflowId
+                - inputs
+              properties:
+                workflowId:
+                  type: string
+                  description: |
+                    The ID of the workflow to run. This ID will start with "workflow_". This ID can be found viewing the workflow on the Extend platform.
+
+                    Example: `"workflow_BMdfq_yWM3sT-ZzvCnA3f"`
+                  example: workflow_id_here
+                version:
+                  type: string
+                  description: An optional version of the workflow to use. This can be a specific version number (e.g., `"1"`, `"2"`) found on the Extend platform, or `"draft"` to use the current unpublished draft version. When a version is not supplied, the latest deployed version of the workflow will be used. If no deployed version exists, the draft version will be used.
+                inputs:
+                  type: array
+                  description: |
+                    An array of input objects to be processed by the workflow. Each object represents a single workflow run to be created. The array must contain at least 1 input and at most 1000 inputs.
+                  items:
+                    type: object
+                    properties:
+                      file:
+                        $ref: "#/components/schemas/BatchWorkflowRunFileInput"
+                        description: The file to be processed. Either `file` or `rawText` must be provided for each input.
+                      rawText:
+                        type: string
+                        description: A string containing raw text data to be processed. This will be treated as a `.txt` file by the workflow. Use the `file` parameter for structured data or specific file types. Either `file` or `rawText` must be provided for each input.
+                      metadata:
+                        "$ref": "#/components/schemas/JsonObject"
+                        description: An optional object containing arbitrary key-value pairs to associate with this specific workflow run. This metadata will be included in webhook payloads and responses when fetching the workflow run details.
+                      secrets:
+                        type: object
+                        description: An optional object containing secrets to be used by processors within the workflow for this specific run. Secrets provided here override any globally configured secrets for the workflow.
+      responses:
+        "200":
+          description: Successfully queued batch workflow run
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - batchId
+                properties:
+                  success:
+                    type: boolean
+                    description: Indicates whether the batch request was successfully accepted and queued. `true` signifies success.
+                  batchId:
+                    type: string
+                    description: A unique identifier for the submitted batch. This ID can be used to correlate the workflow runs created by this request. You can find this `batchId` associated with individual runs when listing workflow runs or in webhook payloads.
+                    example: "batch_zyx987"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+  /processor_runs:
+    post:
+      x-fern-sdk-group-name: processorRun
+      x-fern-sdk-method-name: create # client.processorRun.create
+      tags:
+        - Processor Endpoints
+      summary: Run Processor
+      description: |
+        Run processors (extraction, classification, splitting, etc.) on a given document.
+
+        In general, the recommended way to integrate with Extend in production is via workflows, using the [Run Workflow](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/run-workflow) endpoint. This is due to several factors:
+        * file parsing/pre-processing will automatically be reused across multiple processors, which will give you simplicity and cost savings given that many use cases will require multiple processors to be run on the same document.
+        * workflows provide dedicated human in the loop document review, when needed.
+        * workflows allow you to model and manage your pipeline with a single endpoint and corresponding UI for modeling and monitoring.
+
+        However, there are a number of legitimate use cases and systems where it might be easier to model the pipeline via code and run processors directly. This endpoint is provided for this purpose.
+
+        Similar to workflow runs, processor runs are asynchronous and will return a status of `PROCESSING` until the run is complete. You can [configure webhooks](https://docs.extend.ai/2025-04-21/developers/webhooks/configuration) to receive notifications when a processor run is complete or failed.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - processorId
+              properties:
+                processorId:
+                  $ref: "#/components/schemas/ProcessorId"
+                version:
+                  type: string
+                  default: "latest"
+                  description: |
+                    An optional version of the processor to use. When not supplied, the most recent published version of the processor will be used. Special values include:
+                    - `"latest"` for the most recent published version. If there are no published versions, the draft version will be used.
+                    - `"draft"` for the draft version.
+                    - Specific version numbers corresponding to versions your team has published, e.g. `"1.0"`, `"2.2"`, etc.
+                file:
+                  $ref: "#/components/schemas/ProcessorRunFileInput"
+                  description: The file to be processed. One of `file` or `rawText` must be provided. Supported file types can be found [here](https://docs.extend.ai/2025-04-21/developers/guides/supported-file-types).
+                rawText:
+                  type: string
+                  description: A raw string to be processed. Can be used in place of file when passing raw text data streams. One of `file` or `rawText` must be provided.
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 50
+                  description: An optional value used to determine the relative order of ProcessorRuns when rate limiting is in effect. Lower values will be prioritized before higher values.
+                metadata:
+                  "$ref": "#/components/schemas/JsonObject"
+                  description: |
+                    An optional object that can be passed in to identify the run of the document processor. It will be returned back to you in the response and webhooks.
+                config:
+                  oneOf:
+                    - $ref: "#/components/schemas/ClassificationConfig"
+                    - $ref: "#/components/schemas/ExtractionConfig"
+                    - $ref: "#/components/schemas/SplitterConfig"
+                  description: The configuration for the processor run. If this is provided, this config will be used. If not provided, the config for the specific version you provide will be used. The type of configuration must match the processor type.
+      responses:
+        "200":
+          description: Successfully created processor run
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - processorRun
+                properties:
+                  success:
+                    type: boolean
+                  processorRun:
+                    $ref: "#/components/schemas/ProcessorRun"
+              examples:
+                RunProcessorResponse:
+                  summary: Processor run response
+                  value:
+                    success: true
+                    processorRun:
+                      object: document_processor_run
+                      id: dpr_l39vTgFDiB13heVuMQnUa
+                      processorId: dp_SmJyN3LMx9kW_YmFTxTha
+                      processorVersionId: dpv_YrgxmNn83sAO0JChhmLpa
+                      processorName: "My Processor"
+                      status: PROCESSING
+                      failureReason: null
+                      failureMessage: null
+                      metadata: null
+                      reviewed: false
+                      edited: false
+                      edits: {}
+                      type: EXTRACT
+                      config:
+                        type: EXTRACT
+                        baseProcessor: null
+                        baseVersion: null
+                        extractionRules: null
+                        schema:
+                          type: object
+                          required:
+                            - name
+                            - age
+                          properties:
+                            age:
+                              type:
+                                - number
+                                - "null"
+                              description: "The age of the person"
+                            name:
+                              type:
+                                - string
+                                - "null"
+                              description: "The name of the person"
+                          additionalProperties: false
+                        fields: null
+                        advancedOptions:
+                          documentKind: null
+                          keyDefinitions: null
+                          modelReasoningInsightsEnabled: null
+                          advancedMultimodalEnabled: true
+                          citationsEnabled: null
+                          autoReviewAssistantEnabled: null
+                          advancedFigureParsingEnabled: false
+                          chunkingOptions:
+                            chunkingStrategy: standard
+                            pageChunkSize: null
+                            chunkSelectionStrategy: intelligent
+                            customSemanticChunkingRules: null
+                          fixedPageLimit: null
+                      initialOutput: {}
+                      reviewedOutput: null
+                      output: {}
+                      files:
+                        - object: file
+                          id: file_0QyyVL9rrOd0_WllDDCNa
+                          name: "My File"
+                          type: PDF
+                          presignedUrl: null
+                          parentFileId: null
+                          contents: null
+                          metadata:
+                            pageCount: null
+                            parentSplit: null
+                          createdAt: "2025-05-12T21:22:37.318000+00:00"
+                          updatedAt: "2025-05-12T21:22:37.324000+00:00"
+                      mergedProcessors: []
+                      url: "https://dashboard.extend.ai/runs/dpr_l39vTgFDiB13heVuMQnUa"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /processor_runs/{id}:
+    get:
+      x-fern-sdk-group-name: processorRun
+      x-fern-sdk-method-name: get # client.processorRun.get
+      tags:
+        - Processor Endpoints
+      summary: Get Processor Run
+      description: |
+        Retrieve details about a specific processor run, including its status, outputs, and any edits made during review.
+
+        A common use case for this endpoint is to poll for the status and final output of an async processor run when using the [Run Processor](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/run-processor) endpoint. For instance, if you do not want to not configure webhooks to receive the output via completion/failure events.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The unique identifier for this processor run.
+
+            Example: `"dpr_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: processor_run_id_here
+      responses:
+        "200":
+          description: Successfully retrieved processor run
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - processorRun
+                properties:
+                  success:
+                    type: boolean
+                  processorRun:
+                    $ref: "#/components/schemas/ProcessorRun"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /processors:
+    post:
+      x-fern-sdk-group-name: processor
+      x-fern-sdk-method-name: create # client.processor.create
+      tags:
+        - Processor Endpoints
+      summary: Create Processor
+      description: Create a new processor in Extend, optionally cloning from an existing processor
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - type
+              properties:
+                name:
+                  type: string
+                  description: The name of the new processor
+                  example: "My Processor Name"
+                type:
+                  $ref: "#/components/schemas/ProcessorType"
+                cloneProcessorId:
+                  type: string
+                  description: |
+                    The ID of an existing processor to clone. One of `cloneProcessorId` or `config` must be provided.
+
+                    Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+                config:
+                  oneOf:
+                    - $ref: "#/components/schemas/ClassificationConfig"
+                    - $ref: "#/components/schemas/ExtractionConfig"
+                    - $ref: "#/components/schemas/SplitterConfig"
+                  description: The configuration for the processor. The type of configuration must match the processor type. One of `cloneProcessorId` or `config` must be provided.
+      responses:
+        "200":
+          description: Successfully created processor
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - processor
+                properties:
+                  success:
+                    type: boolean
+                  processor:
+                    $ref: "#/components/schemas/Processor"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          description: Processor to clone not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /processors/{processorId}/versions/{processorVersionId}:
+    get:
+      x-fern-sdk-group-name: processorVersion
+      x-fern-sdk-method-name: get # client.processorVersion.get
+      tags:
+        - Processor Endpoints
+      summary: Get Processor Version
+      description: Retrieve a specific version of a processor in Extend
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: processorId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The ID of the processor.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: processor_id_here
+        - name: processorVersionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The ID of the specific processor version to retrieve.
+
+            Example: `"dpv_QYk6jgHA_8CsO8rVWhyNC"`
+          example: processor_version_id_here
+      responses:
+        "200":
+          description: Successfully retrieved processor version
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - version
+                properties:
+                  success:
+                    type: boolean
+                  version:
+                    $ref: "#/components/schemas/ProcessorVersion"
+                    description: A ProcessorVersion object representing the requested version of the processor.
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          description: Processor or version not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /processors/{id}/versions:
+    get:
+      x-fern-sdk-group-name: processorVersion
+      x-fern-sdk-method-name: list # client.processorVersion.list
+      tags:
+        - Processor Endpoints
+      summary: List Processor Versions
+      description: |
+        This endpoint allows you to fetch all versions of a given processor, including the current `draft` version.
+
+        Versions are typically returned in descending order of creation (newest first), but this should be confirmed in the actual implementation.
+        The `draft` version is the latest unpublished version of the processor, which can be published to create a new version. It might not have any changes from the last published version.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The ID of the processor to retrieve versions for.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: processor_id_here
+      responses:
+        "200":
+          description: Successfully retrieved processor versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - versions
+                properties:
+                  success:
+                    type: boolean
+                  versions:
+                    type: array
+                    description: An array of ProcessorVersion objects representing all versions of the specified processor.
+                    items:
+                      $ref: "#/components/schemas/ProcessorVersion"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          description: Processor not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /parse:
+    post:
+      x-fern-sdk-method-name: parse # client.parse
+      tags:
+        - Parse Endpoints
+      summary: Parse File
+      description: |
+        Parse files to get cleaned, chunked target content (e.g. markdown).
+
+        The Parse endpoint allows you to convert documents into structured, machine-readable formats with fine-grained control over the parsing process. This endpoint is ideal for extracting cleaned document content to be used as context for downstream processing, e.g. RAG pipelines, custom ingestion pipelines, embeddings classification, etc.
+
+        Unlike processor and workflow runs, parsing is a synchronous endpoint and returns the parsed content in the response. Expected latency depends primarily on file size. This makes it suitable for workflows where you need immediate access to document content without waiting for asynchronous processing.
+
+        For more details, see the [Parse File guide](https://docs.extend.ai/2025-04-21/developers/guides/parse).
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: object
+                  description: A file object containing either a URL or a fileId.
+                  properties:
+                    fileName:
+                      type: string
+                      description: The name of the file. If not set, the file name is taken from the url.
+                    fileUrl:
+                      type: string
+                      description: A URL to download the file. For production use cases, we recommend using presigned URLs with a 5-15 minute expiration time. One of `fileUrl` or `fileId` must be provided.
+                    fileId:
+                      type: string
+                      description: |
+                        If you already have an Extend file id (for instance from running a workflow or a previous [file upload](https://docs.extend.ai/2025-04-21/developers/api-reference/file-endpoints/upload-file)) then you can use that file id when running the parse endpoint so that it leverage any cached data that might be available. The file id will start with "file_". One of `fileUrl` or `fileId` must be provided.
+
+                        Example: `"file_xK9mLPqRtN3vS8wF5hB2cQ"`
+                config:
+                  $ref: "#/components/schemas/ParseConfig"
+      responses:
+        "200":
+          description: Successfully parsed file
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - object
+                  - id
+                  - fileId
+                  - chunks
+                  - status
+                  - metrics
+                  - config
+                properties:
+                  object:
+                    type: string
+                    description: The type of object. Will always be `"parser_run"`.
+                    enum: [parser_run]
+                  id:
+                    type: string
+                    description: |
+                      A unique identifier for the parser run. Will always start with `"parser_run_"`
+
+                      Example: `"parser_run_xK9mLPqRtN3vS8wF5hB2cQ"`
+                    example: "parser_run_xK9mLPqRtN3vS8wF5hB2cQ"
+                  fileId:
+                    type: string
+                    description: The identifier of the file that was parsed. This can be used as a parameter to other Extend endpoints, such as processor runs. This allows downstream processing to reuse a cache of the parsed file content to reduce your usage costs.
+                    example: "file_Zk9mNP12Qw4yTv8BdR3H"
+                  chunks:
+                    type: array
+                    description: An array of chunks that were parsed from the file.
+                    items:
+                      $ref: "#/components/schemas/Chunk"
+                  status:
+                    type: string
+                    enum: [PROCESSED, FAILED]
+                    description: |
+                      The status of the parser run:
+                      * `"PROCESSED"` - The file was successfully processed
+                      * `"FAILED"` - The processing failed (see failureReason for details)
+                  failureReason:
+                    type: string
+                    description: The reason for failure if status is "FAILED".
+                  metrics:
+                    type: object
+                    description: Metrics about the parsing process.
+                    required:
+                      - processingTimeMs
+                      - pageCount
+                    properties:
+                      processingTimeMs:
+                        type: number
+                        description: The time taken to process the document in milliseconds.
+                      pageCount:
+                        type: number
+                        description: The number of pages in the document.
+                  config:
+                    $ref: "#/components/schemas/ParseConfig"
+                    description: The configuration used for the parsing process, including any default values that were applied.
+
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "422":
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /files:
+    get:
+      x-fern-sdk-group-name: file
+      x-fern-sdk-method-name: list # client.file.list
+      tags:
+        - File Endpoints
+      summary: List Files
+      description: List files in your account. Files represent documents that have been uploaded to Extend. This endpoint returns a paginated response. You can use the `nextPageToken` to fetch subsequent results.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: nameContains
+          in: query
+          schema:
+            type: string
+          description: |
+            Filters files to only include those that contain the given string in the name.
+
+            Example: `"invoice"`
+        # We only support sortBy createdAt so I just removed this
+        # - name: sortBy
+        #   in: query
+        #   schema:
+        #     type: string
+        #     enum: [createdAt]
+        #     description: The field to sort the files by. Currently only supports sorting by creation date.
+        - name: sortDir
+          in: query
+          schema:
+            $ref: "#/components/schemas/SortDirEnum"
+          description: Sorts the files in ascending or descending order. Ascending order means the earliest file is returned first.
+        - name: nextPageToken
+          in: query
+          schema:
+            $ref: "#/components/schemas/NextPageToken"
+        - name: maxPageSize
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaxPageSize"
+      responses:
+        "200":
+          description: Successfully retrieved files
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - files
+                properties:
+                  success:
+                    type: boolean
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/File"
+                  nextPageToken:
+                    $ref: "#/components/schemas/NextPageToken"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+    post:
+      tags:
+        - File Endpoints
+      summary: Create File
+      description: Create a new file in Extend for use in an evaluation set. This endpoint is deprecated, use /files/upload instead.
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the file
+                url:
+                  type: string
+                  description: A pre signed URL for the file
+                rawText:
+                  type: string
+                  description: The raw text content of the file
+                mediaType:
+                  type: string
+                  description: The media type of the file (e.g. application/pdf)
+      responses:
+        "200":
+          description: Successfully created file
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  file:
+                    $ref: "#/components/schemas/File"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+
+  /files/{id}:
+    get:
+      x-fern-sdk-group-name: file
+      x-fern-sdk-method-name: get # client.file.get
+      tags:
+        - File Endpoints
+      summary: Get File
+      description: Fetch a file by its ID to obtain additional details and the raw file content.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            Extend's ID for the file. It will always start with `"file_"`. This ID is returned when creating a new File, or the value on the `fileId` field in a WorkflowRun.
+
+            Example: `"file_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: file_id_here
+        - name: rawText
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: |
+            If set to true, the raw text content of the file will be included in the response. This is useful for indexing text-based files like PDFs, Word Documents, etc.
+        - name: markdown
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: |
+            If set to true, the markdown content of the file will be included in the response. This is useful for indexing very clean content into RAG pipelines for files like PDFs, Word Documents, etc.
+
+            Only available for files with a type of PDF, IMG, or .doc/.docx files that were auto-converted to PDFs.
+        - name: html
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: |
+            If set to true, the html content of the file will be included in the response. This is useful for indexing html content into RAG pipelines.
+
+            Only available for files with a type of DOCX.
+      responses:
+        "200":
+          description: Successfully retrieved file
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - file
+                properties:
+                  success:
+                    type: boolean
+                  file:
+                    $ref: "#/components/schemas/File"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /evaluation_sets:
+    post:
+      x-fern-sdk-group-name: evaluationSet
+      x-fern-sdk-method-name: create # client.evaluationSet.create
+      tags:
+        - Evaluation Set Endpoints
+      summary: Create Evaluation Set
+      description: |
+        Evaluation sets are collections of files and expected outputs that are used to evaluate the performance of a given processor in Extend. This endpoint will create a new evaluation set in Extend, which items can be added to using the [Create Evaluation Set Item](https://docs.extend.ai/2025-04-21/developers/api-reference/evaluation-set-endpoints/create-evaluation-set-item) endpoint.
+
+        Note: it is not necessary to create an evaluation set via API. You can also create an evaluation set via the Extend dashboard and take the ID from there.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - description
+                - processorId
+              properties:
+                name:
+                  type: string
+                  description: |
+                    The name of the evaluation set.
+
+                    Example: `"Invoice Processing Test Set"`
+                  example: "My Evaluation Set"
+                description:
+                  type: string
+                  description: |
+                    A description of what this evaluation set is used for.
+
+                    Example: `"Q4 2023 vendor invoices"`
+                  example: "My Evaluation Set Description"
+                processorId:
+                  type: string
+                  description: |
+                    The ID of the processor to create an evaluation set for. Evaluation sets can in theory be run against any processor, but it is required to associate the evaluation set with a primary processor.
+
+                    Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+                  example: processor_id_here
+      responses:
+        "200":
+          description: Successfully created evaluation set
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - evaluationSet
+                properties:
+                  success:
+                    type: boolean
+                  evaluationSet:
+                    $ref: "#/components/schemas/EvaluationSet"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+
+  /evaluation_set_items:
+    post:
+      x-fern-sdk-group-name: evaluationSetItem
+      x-fern-sdk-method-name: create # client.evaluationSetItem.create
+      tags:
+        - Evaluation Set Endpoints
+      summary: Create Evaluation Set Item
+      description: |
+        Evaluation set items are the individual files and expected outputs that are used to evaluate the performance of a given processor in Extend. This endpoint will create a new evaluation set item in Extend, which will be used during an evaluation run.
+
+        Best Practices for Outputs in Evaluation Sets:
+        - **Configure First, Output Later**
+          - Always create and finalize your processor configuration before creating evaluation sets
+          - Field IDs in outputs must match those defined in your processor configuration
+        - **Type Consistency**
+          - Ensure output types exactly match your processor configuration
+          - For example, if a field is configured as "currency", don't submit a simple number value
+        - **Field IDs**
+          - Use the exact field IDs from your processor configuration
+          - Create your own semantic IDs instead in the configs for each field/type instead of using the generated ones
+        - **Value**
+          - Remember that all results are inside the value key of a result object, except the values within nested structures.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - evaluationSetId
+                - fileId
+                - expectedOutput
+              properties:
+                evaluationSetId:
+                  type: string
+                  description: |
+                    The ID of the evaluation set to add the item to.
+
+                    Example: `"ev_Xj8mK2pL9nR4vT7qY5wZ"`
+                  example: evaluation_set_id_here
+                fileId:
+                  type: string
+                  description: |
+                    Extend's internal ID for the file. It will always start with "file_".
+
+                    Example: `"file_xK9mLPqRtN3vS8wF5hB2cQ"`
+                  example: file_id_here
+                expectedOutput:
+                  $ref: "#/components/schemas/ProvidedProcessorOutput"
+                  description: The expected output that will be used to evaluate the processor's performance.
+      responses:
+        "200":
+          description: Successfully created evaluation set item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - evaluationSetItem
+                properties:
+                  success:
+                    type: boolean
+                  evaluationSetItem:
+                    $ref: "#/components/schemas/EvaluationSetItem"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+
+  /processors/{id}/publish:
+    post:
+      x-fern-sdk-group-name: processorVersion
+      x-fern-sdk-method-name: create # client.processorVersion.create
+      tags:
+        - Processor Endpoints
+      summary: Publish Processor Version
+      description: |
+        This endpoint allows you to publish a new version of an existing processor. Publishing a new version creates a snapshot of the processor's current configuration and makes it available for use in workflows.
+
+        Publishing a new version does not automatically update existing workflows using this processor. You may need to manually update workflows to use the new version if desired.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The ID of the processor to publish a new version for.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: processor_id_here
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - releaseType
+              properties:
+                releaseType:
+                  type: string
+                  enum: [major, minor]
+                  description: The type of release for this version. The two options are "major" and "minor", which will increment the version number accordingly.
+                description:
+                  type: string
+                  description: A description of the changes in this version. This helps track the evolution of the processor over time.
+                config:
+                  oneOf:
+                    - $ref: "#/components/schemas/ClassificationConfig"
+                    - $ref: "#/components/schemas/ExtractionConfig"
+                    - $ref: "#/components/schemas/SplitterConfig"
+                  description: The configuration for this version of the processor. The type of configuration must match the processor type.
+      responses:
+        "200":
+          description: Successfully published processor version
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - processorVersion
+                properties:
+                  success:
+                    type: boolean
+                  processorVersion:
+                    $ref: "#/components/schemas/ProcessorVersion"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+  /evaluation_set_items/{id}:
+    post:
+      x-fern-sdk-group-name: evaluationSetItem
+      x-fern-sdk-method-name: update # client.evaluationSetItem.update
+      tags:
+        - Evaluation Set Endpoints
+      summary: Update Evaluation Set Item
+      description: |
+        If you need to change the expected output for a given evaluation set item, you can use this endpoint to update the item. This can be useful if you need to correct an error in the expected output or if the output of the processor has changed.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The ID of the evaluation set item to update.
+
+            Example: `"evi_kR9mNP12Qw4yTv8BdR3H"`
+          example: evaluation_set_item_id_here
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - expectedOutput
+              properties:
+                expectedOutput:
+                  $ref: "#/components/schemas/ProvidedProcessorOutput"
+                  description: The expected output of the processor when run against the file
+      responses:
+        "200":
+          description: Successfully updated evaluation set item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - evaluationSetItem
+                properties:
+                  success:
+                    type: boolean
+                  evaluationSetItem:
+                    $ref: "#/components/schemas/EvaluationSetItem"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /evaluation_set_items/bulk:
+    post:
+      x-fern-sdk-group-name: evaluationSetItem
+      x-fern-sdk-method-name: createBatch # client.evaluationSetItem.createBatch
+      tags:
+        - Evaluation Set Endpoints
+      summary: Bulk Create Evaluation Set Items
+      description: |
+        If you have a large number of files that you need to add to an evaluation set, you can use this endpoint to create multiple evaluation set items at once. This can be useful if you have a large dataset that you need to evaluate the performance of a processor against.
+
+        Note: you still need to create each File first using the file API.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - evaluationSetId
+                - items
+              properties:
+                evaluationSetId:
+                  type: string
+                  description: |
+                    The ID of the evaluation set to add the items to.
+
+                    Example: `"ev_2LcgeY_mp2T5yPaEuq5Lw"`
+                  example: evaluation_set_id_here
+                items:
+                  type: array
+                  description: An array of objects representing the evaluation set items to create
+                  items:
+                    type: object
+                    required:
+                      - fileId
+                      - expectedOutput
+                    properties:
+                      fileId:
+                        type: string
+                        description: |
+                          Extend's internal ID for the file. It will always start with "file_".
+
+                          Example: `"file_xK9mLPqRtN3vS8wF5hB2cQ"`
+                        example: file_id_here
+                      expectedOutput:
+                        $ref: "#/components/schemas/ProvidedProcessorOutput"
+                        description: The expected output of the processor when run against the file
+      responses:
+        "200":
+          description: Successfully created evaluation set items
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - evaluationSetItems
+                properties:
+                  success:
+                    type: boolean
+                  evaluationSetItems:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EvaluationSetItem"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+  /workflow_runs/{workflowRunId}/outputs/{outputId}:
+    post:
+      x-fern-sdk-group-name: workflowRunOutput
+      x-fern-sdk-method-name: update # client.workflowRunOutput.update
+      tags:
+        - Workflow Endpoints
+      summary: Correct Workflow Run Outputs
+      description: |
+        Use this endpoint to submit corrected outputs for a WorkflowRun for future processor evaluation and tuning in Extend.
+
+        If you are using our Human-in-the-loop workflow review, then we already will be collecting your operator submitted corrections. However, if you are receiving data via the API without human review, there could be incorrect outputs that you would like to correct for future usage in evaluation and tuning within the Extend platform. This endpoint allows you to submit corrected outputs for a WorkflowRun, by providing the correct output for a given output ID.
+
+        The output ID, would be found in a given entry within the outputs arrays of a Workflow Run payload. The ID would look something like `dpr_gwkZZNRrPgkjcq0y-***`.
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: workflowRunId
+          in: path
+          required: true
+          schema:
+            type: string
+            description: |
+              The ID of the workflow run that included this initial output. This ID can be found when creating a WorkflowRun via API, or in the "history" tab of a workflow on the Extend platform.
+
+              Example: `"workflow_run_xKm9pNv3qWsY_jL2tR5Dh"`
+            example: workflow_run_id_here
+        - name: outputId
+          in: path
+          required: true
+          schema:
+            type: string
+            description: |
+              The ID of the output that these corrections are for.
+
+              Example: `"dpr_Xj8mK2pL9nR4vT7qY5wZ"`
+            example: output_id_here
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reviewedOutput
+              properties:
+                reviewedOutput:
+                  $ref: "#/components/schemas/ProvidedProcessorOutput"
+                  description: |
+                    The corrected output of the processor when run against the file.
+
+                    This should conform to the output type schema of the given processor.
+
+                    If this is an extraction result, you can include all fields, or just the ones that were corrected, our system will handle merges/dedupes. However, if you do include a field, we assume the value included in the final reviewed value.
+      responses:
+        "200":
+          description: Successfully corrected workflow run output
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - workflowRun
+                properties:
+                  success:
+                    type: boolean
+                  workflowRun:
+                    $ref: "#/components/schemas/WorkflowRun"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+  /batch_processor_runs/{id}:
+    get:
+      x-fern-sdk-group-name: batchProcessorRun
+      x-fern-sdk-method-name: get # client.batchProcessorRun.get
+      tags:
+        - Processor Endpoints
+      summary: Get Batch Processor Run
+      description: Retrieve details about a batch processor run, including evaluation runs
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The unique identifier of the batch processor run to retrieve. The ID will always start with "bpr_".
+
+            Example: `"bpr_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: batch_processor_run_id_here
+      responses:
+        "200":
+          description: Successfully retrieved batch processor run
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - batchProcessorRun
+                properties:
+                  success:
+                    type: boolean
+                  batchProcessorRun:
+                    $ref: "#/components/schemas/BatchProcessorRun"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+
+  /workflows:
+    post:
+      x-fern-sdk-group-name: workflow
+      x-fern-sdk-method-name: create # client.workflow.create
+      tags:
+        - Workflow Endpoints
+      summary: Create Workflow
+      description: |
+        Create a new workflow in Extend. Workflows are sequences of steps that process files and data in a specific order to achieve a desired outcome.
+
+        This endpoint will create a new workflow in Extend, which can then be configured and deployed. Typically, workflows are created from our UI, however this endpoint can be used to create workflows programmatically. Configuration of the flow still needs to be done in the dashboard.
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: The name of the workflow
+                  example: "Invoice Processing"
+      responses:
+        "200":
+          description: Successfully created workflow
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - workflow
+                properties:
+                  success:
+                    type: boolean
+                  workflow:
+                    $ref: "#/components/schemas/Workflow"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+  /processors/{id}:
+    post:
+      x-fern-sdk-group-name: processor
+      x-fern-sdk-method-name: update # client.processor.update
+      tags:
+        - Processor Endpoints
+      summary: Update Processor
+      description: Update an existing processor in Extend
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: |
+            The ID of the processor to update.
+
+            Example: `"dp_Xj8mK2pL9nR4vT7qY5wZ"`
+          example: processor_id_here
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The new name for the processor
+                config:
+                  oneOf:
+                    - $ref: "#/components/schemas/ClassificationConfig"
+                    - $ref: "#/components/schemas/ExtractionConfig"
+                    - $ref: "#/components/schemas/SplitterConfig"
+                  description: |
+                    The new configuration for the processor. The type of configuration must match the processor type:
+                    * For classification processors, use `ClassificationConfig`
+                    * For extraction processors, use `ExtractionConfig`
+                    * For splitter processors, use `SplitterConfig`
+      responses:
+        "200":
+          description: Successfully updated processor
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - processor
+                properties:
+                  success:
+                    type: boolean
+                  processor:
+                    $ref: "#/components/schemas/Processor"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "404":
+          $ref: "#/components/responses/Error404"
+  /files/upload:
+    post:
+      x-fern-sdk-group-name: file
+      x-fern-sdk-method-name: upload # client.file.upload
+      tags:
+        - File Endpoints
+      summary: Upload File
+      description: |
+        Upload and create a new file in Extend.
+
+        This endpoint accepts file contents and registers them as a File in Extend, which can be used for [running workflows](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/run-workflow), [creating evaluation set items](https://docs.extend.ai/2025-04-21/developers/api-reference/evaluation-set-endpoints/bulk-create-evaluation-set-items), [parsing](https://docs.extend.ai/2025-04-21/developers/api-reference/parse-endpoints/parse-file), etc.
+
+        If an uploaded file is detected as a Word or PowerPoint document, it will be automatically converted to a PDF.
+
+        Supported file types can be found [here](https://docs.extend.ai/2025-04-21/developers/guides/supported-file-types).
+
+        This endpoint requires multipart form encoding. Most HTTP clients will handle this encoding automatically (see the examples).
+      parameters:
+        - $ref: "#/components/parameters/ApiVersion"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file contents to upload
+      responses:
+        "200":
+          description: Successfully uploaded file
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - file
+                properties:
+                  success:
+                    type: boolean
+                  file:
+                    $ref: "#/components/schemas/File"
+              examples:
+                FileUploadResponse:
+                  summary: File object returned on upload
+                  value:
+                    success: true
+                    file:
+                      object: file
+                      id: file_dmuFrLrcdW0Jv6f78f20a
+                      name: "My File"
+                      type: PDF
+                      presignedUrl: null
+                      parentFileId: null
+                      contents:
+                        rawText: null
+                        markdown: null
+                        pages: null
+                        sheets: null
+                      metadata:
+                        pageCount: null
+                        parentSplit: null
+                      createdAt: "2025-05-12T20:57:39.105000+00:00"
+                      updatedAt: "2025-05-12T20:57:39.111000+00:00"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Error"
+                  - type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                          - FILE_TYPE_NOT_SUPPORTED
+                          - FILE_SIZE_TOO_LARGE
+                          - CORRUPT_FILE
+                          - PASSWORD_PROTECTED_FILE
+        "401":
+          $ref: "#/components/responses/Error401"
