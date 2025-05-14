@@ -48,6 +48,35 @@ main = do
   -- ...
 ```
 
+### Working with Workflows
+
+Extend organizes document processing around workflows. Here's how to interact with workflows:
+
+```haskell
+import Extend.V1
+import qualified Extend.V1.Workflows as Workflows
+import Control.Exception (throwIO)
+import Servant.Client (runClientM)
+import Data.Text (unpack)
+
+-- Get information about a workflow
+getWorkflowExample :: IO ()
+getWorkflowExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      workflowId = "wf_123456789"
+
+  result <- runClientM (getWorkflow token version workflowId) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let workflow = data_ response
+      putStrLn $ "Workflow name: " ++ unpack (workflowName workflow)
+      putStrLn $ "Workflow version: " ++ unpack (workflowVersion workflow)
+```
+
 ### Running Workflows
 
 Workflows are the primary way to process documents in Extend:
@@ -145,6 +174,89 @@ processProcessorOutput output = do
   putStrLn $ "  Edited: " ++ show (Workflows.documentProcessorRunEdited output)
 ```
 
+### Batch Running Workflows
+
+For processing multiple files in a batch:
+
+```haskell
+import Extend.V1
+import qualified Extend.V1.Workflows as Workflows
+import Control.Exception (throwIO)
+import Servant.Client (runClientM)
+import Data.Text (unpack)
+
+batchRunWorkflowExample :: IO ()
+batchRunWorkflowExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+
+  -- Create a batch request
+  let fileInputs =
+        [ BatchInputFile
+            { batchInputFileName = "doc1.pdf"
+            , batchInputFileUrl = "https://example.com/doc1.pdf"
+            }
+        , BatchInputFile
+            { batchInputFileName = "doc2.pdf"
+            , batchInputFileUrl = "https://example.com/doc2.pdf"
+            }
+        ]
+
+      workflowInputs =
+        [ BatchWorkflowInput
+            { batchWorkflowInputFiles = fileInputs
+            , batchWorkflowInputMetadata = Just [("batch", String "first")]
+            }
+        ]
+
+      request = BatchRunWorkflowRequest
+        { batchRunWorkflowRequestWorkflowId = "wf_123456789"
+        , batchRunWorkflowRequestInputs = workflowInputs
+        , batchRunWorkflowRequestVersion = Nothing
+        }
+
+  result <- runClientM (batchRunWorkflow token version request) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      putStrLn $ "Batch ID: " ++ unpack (batchRunWorkflowResponseBatchId response)
+      putStrLn $ "Workflow runs created: " ++ show (length (batchRunWorkflowResponseWorkflowRuns response))
+```
+
+### Creating Workflows
+
+You can also create new workflows:
+
+```haskell
+import Extend.V1
+import qualified Extend.V1.Workflows as Workflows
+import Control.Exception (throwIO)
+import Servant.Client (runClientM)
+import Data.Text (unpack)
+
+createWorkflowExample :: IO ()
+createWorkflowExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+
+  let request = CreateWorkflowRequest
+        { createWorkflowRequestName = "Invoice Processing"
+        , createWorkflowRequestDescription = Just "Process and extract data from invoices"
+        }
+
+  result <- runClientM (createWorkflow token version request) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let workflow = createdWorkflowObjectWorkflow (data_ response)
+      putStrLn $ "Created workflow: " ++ unpack (workflowName workflow)
+      putStrLn $ "ID: " ++ unpack (workflowId workflow)
+```
+
 ### Listing Workflow Runs
 
 You can list existing workflow runs:
@@ -165,7 +277,7 @@ listWorkflowRunsExample = do
   let token = ApiToken "your-api-key"
       version = defaultApiVersion
 
-  -- List workflow runs
+  -- List workflow runs (with optional filtering parameters)
   result <- runClientM (listWorkflowRuns token version Nothing Nothing Nothing Nothing Nothing Nothing Nothing) env
 
   case result of
@@ -366,6 +478,8 @@ errorHandlingExample = do
 ## Documentation
 
 For more details about the Extend API, refer to the [official documentation](https://docs.extend.ai/developers).
+
+For LLM-focused documentation, check out [https://docs.extend.ai/llms.txt](https://docs.extend.ai/llms.txt) and [https://docs.extend.ai/llms-full.txt](https://docs.extend.ai/llms-full.txt).
 
 ## License
 
