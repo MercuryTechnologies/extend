@@ -72,6 +72,8 @@ test-suite tasty
                     , servant-client
                     , http-client
                     , http-client-tls
+                    , time
+                    , bytestring
     ghc-options:      -Wall
 
 executable extend-example
