@@ -70,20 +70,21 @@ runExtendWorkflow = do
 
   -- Create a request to run a workflow
   let request = RunWorkflowRequest
-        { workflowId = "wf_123456789"
-        , files = Just
+        { runWorkflowRequestWorkflowId = "wf_123456789"
+        , runWorkflowRequestFiles = Just
             [ ExtendFile
-                { fileName = Just "example.pdf"
-                , fileUrl = Just "https://example.com/file.pdf"
-                , fileId = Nothing
-                , outputs = Nothing
+                { extendFileName = Just "example.pdf"
+                , extendFileUrl = Just "https://example.com/file.pdf"
+                , extendFileId = Nothing
+                , extendFileOutputs = Nothing
                 }
             ]
-        , rawTexts = Nothing
-        , priority = Just 50
-        , metadata = Just
+        , runWorkflowRequestRawTexts = Nothing
+        , runWorkflowRequestPriority = Just 50
+        , runWorkflowRequestMetadata = Just
             [("customer_id", String "cust_123"),
              ("reference_number", String "REF-456")]
+        , runWorkflowRequestVersion = Nothing
         }
 
   -- Run the workflow
@@ -93,59 +94,43 @@ runExtendWorkflow = do
     Left err -> throwIO err
     Right response -> do
       -- Process the workflow runs
-      let runs = workflowRuns response
+      let runs = runWorkflowResponseWorkflowRuns response
       mapM_ processWorkflowRun runs
 
 -- Process a workflow run
-processWorkflowRun :: Workflows.WorkflowRun -> IO ()
+processWorkflowRun :: Workflows.CreatedWorkflowRun -> IO ()
 processWorkflowRun run = do
   -- Access fields of the WorkflowRun
-  putStrLn $ "Workflow Run ID: " ++ unpack (Workflows.workflowRunId run)
-  putStrLn $ "Status: " ++ show (Workflows.workflowRunStatus run)
-  putStrLn $ "Workflow: " ++ unpack (fromMaybe "" (Workflows.workflowRunWorkflowName run))
-  putStrLn $ "Workflow ID: " ++ unpack (fromMaybe "" (Workflows.workflowRunWorkflowId run))
-  putStrLn $ "Created at: " ++ show (Workflows.workflowRunCreatedAt run)
-  putStrLn $ "Updated at: " ++ show (Workflows.workflowRunUpdatedAt run)
-  putStrLn $ "Reviewed: " ++ show (Workflows.workflowRunReviewed run)
+  putStrLn $ "Workflow Run ID: " ++ unpack (Workflows.createdWorkflowRunId run)
+  putStrLn $ "Status: " ++ show (Workflows.createdWorkflowRunStatus run)
+  putStrLn $ "Reviewed: " ++ show (Workflows.createdWorkflowRunReviewed run)
 
-  -- Access optional fields
-  case Workflows.workflowRunInitialRunAt run of
+  -- Access workflow information
+  case Workflows.createdWorkflowRunWorkflow run of
+    Just workflow -> do
+      putStrLn $ "Workflow: " ++ unpack (Workflows.workflowSummaryName workflow)
+      putStrLn $ "Workflow ID: " ++ unpack (Workflows.workflowSummaryId workflow)
+    Nothing -> pure ()
+
+  -- Access initial run time if available
+  case Workflows.createdWorkflowRunInitialRunAt run of
     Just initialRunAt -> putStrLn $ "Initial run at: " ++ show initialRunAt
     Nothing -> pure ()
 
-  case Workflows.workflowRunReviewedBy run of
-    Just reviewer -> putStrLn $ "Reviewed by: " ++ unpack reviewer
-    Nothing -> pure ()
-
-  case Workflows.workflowRunReviewedAt run of
-    Just reviewedAt -> putStrLn $ "Reviewed at: " ++ show reviewedAt
-    Nothing -> pure ()
-
-  case Workflows.workflowRunStartTime run of
-    Just startTime -> putStrLn $ "Started at: " ++ show startTime
-    Nothing -> pure ()
-
-  case Workflows.workflowRunEndTime run of
-    Just endTime -> putStrLn $ "Ended at: " ++ show endTime
-    Nothing -> pure ()
-
-  case Workflows.workflowRunBatchId run of
-    Just batchId -> putStrLn $ "Batch ID: " ++ unpack batchId
-    Nothing -> pure ()
-
-  case Workflows.workflowRunRejectionNote run of
-    Just note -> putStrLn $ "Rejection note: " ++ unpack note
-    Nothing -> pure ()
-
   -- Access metadata if available
-  case Workflows.workflowRunMetadata run of
+  case Workflows.createdWorkflowRunMetadata run of
     Just metadata -> do
       putStrLn "Metadata:"
       mapM_ (\(key, value) -> putStrLn $ "  " ++ unpack key ++ ": " ++ show value) (toList metadata)
     Nothing -> pure ()
 
+  -- Access batch ID if available
+  case Workflows.createdWorkflowRunBatchId run of
+    Just batchId -> putStrLn $ "Batch ID: " ++ unpack batchId
+    Nothing -> pure ()
+
   -- Process document processor runs if available
-  case Workflows.workflowRunOutputs run of
+  case Workflows.createdWorkflowRunOutputs run of
     Just outputs -> do
       putStrLn $ "Processor outputs: " ++ show (length outputs)
       mapM_ processProcessorOutput outputs
@@ -181,22 +166,22 @@ listWorkflowRunsExample = do
       version = defaultApiVersion
 
   -- List workflow runs
-  result <- runClientM (listWorkflowRuns token version Nothing Nothing Nothing) env
+  result <- runClientM (listWorkflowRuns token version Nothing Nothing Nothing Nothing Nothing Nothing Nothing) env
 
   case result of
     Left err -> throwIO err
     Right response -> do
-      let workflowRuns = Workflows.listWorkflowRunsResponseRuns response
-          nextPageToken = Workflows.listWorkflowRunsResponseNextPageToken response
+      let workflowRuns = listWorkflowRunsResponseWorkflowRuns response
+          nextPageToken = listWorkflowRunsResponseNextPageToken response
 
       putStrLn $ "Found " ++ show (length workflowRuns) ++ " workflow runs"
 
       -- Process each workflow run
       mapM_ (\run -> do
-          putStrLn $ "Run ID: " ++ unpack (Workflows.workflowRunId run)
-          putStrLn $ "Status: " ++ show (Workflows.workflowRunStatus run)
-          putStrLn $ "Workflow: " ++ unpack (fromMaybe "" (Workflows.workflowRunWorkflowName run))
-          putStrLn $ "Created at: " ++ show (Workflows.workflowRunCreatedAt run)
+          putStrLn $ "Run ID: " ++ unpack (Workflows.workflowRunSummaryId run)
+          putStrLn $ "Status: " ++ show (Workflows.workflowRunSummaryStatus run)
+          putStrLn $ "Workflow: " ++ unpack (Workflows.workflowRunSummaryWorkflowName run)
+          putStrLn $ "Created at: " ++ show (Workflows.workflowRunSummaryCreatedAt run)
           putStrLn ""
         ) workflowRuns
 
@@ -235,8 +220,8 @@ uploadFileExample = do
 
   case result of
     Left err -> throwIO err
-    Right (SuccessResponse _ response) -> do
-      let fileId = Files.id (Files.file response)
+    Right response -> do
+      let fileId = Files.id (Files.file (data_ response))
 
       -- Upload file content
       let fileContent = "file content as text" -- Or binary data encoded as Text
@@ -244,17 +229,17 @@ uploadFileExample = do
 
       case uploadResult of
         Left err -> throwIO err
-        Right response -> do
+        Right uploadResponse -> do
           -- File uploaded successfully
-          putStrLn $ "File uploaded: " ++ show (success response)
+          putStrLn $ "File uploaded: " ++ show (success uploadResponse)
 
       -- Get file information
       getFileResult <- runClientM (getFile token version fileId) env
 
       case getFileResult of
         Left err -> throwIO err
-        Right (SuccessResponse _ fileResponse) -> do
-          let file = Files.file fileResponse
+        Right getFileResponse -> do
+          let file = Files.file (data_ getFileResponse)
           putStrLn $ "File name: " ++ unpack (Files.name file)
           putStrLn $ "File type: " ++ unpack (fromMaybe "" (Files.type_ file))
 
@@ -307,9 +292,9 @@ runProcessorExample = do
 
   case result of
     Left err -> throwIO err
-    Right (SuccessResponse _ response) -> do
+    Right response -> do
       -- Process the processor run
-      let run = processorRun response
+      let run = Processors.processorRun (data_ response)
       putStrLn $ "Processor run ID: " ++ unpack (Processors.id run)
       putStrLn $ "Status: " ++ show (Processors.status run)
       putStrLn $ "Processor: " ++ unpack (Processors.processorName run)
@@ -330,7 +315,7 @@ runProcessorExample = do
 
 ## Error Handling
 
-The library provides structured error handling through the `ApiError` type:
+The library provides structured error handling through the `ClientError` type from Servant:
 
 ```haskell
 import Extend.V1
@@ -349,11 +334,12 @@ errorHandlingExample = do
 
   -- Create a request to run a workflow
   let request = RunWorkflowRequest
-        { workflowId = "wf_123456789"
-        , files = Nothing
-        , rawTexts = Nothing
-        , priority = Nothing
-        , metadata = Nothing
+        { runWorkflowRequestWorkflowId = "wf_123456789"
+        , runWorkflowRequestFiles = Nothing
+        , runWorkflowRequestRawTexts = Nothing
+        , runWorkflowRequestPriority = Nothing
+        , runWorkflowRequestMetadata = Nothing
+        , runWorkflowRequestVersion = Nothing
         }
 
   -- Run the workflow with error handling
@@ -373,7 +359,7 @@ errorHandlingExample = do
 
     Right response -> do
       -- Process the workflow runs
-      let runs = workflowRuns response
+      let runs = runWorkflowResponseWorkflowRuns response
       -- ...
 ```
 
