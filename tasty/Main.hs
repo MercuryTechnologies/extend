@@ -23,8 +23,8 @@ tests =
         let token = ApiToken "test-token"
          in unApiToken token @?= "test-token",
       testCase "ApiVersion construction" $
-        let version = ApiVersion "2025-04-21"
-         in unApiVersion version @?= "2025-04-21",
+        let apiVersion = ApiVersion "2025-04-21"
+         in unApiVersion apiVersion @?= "2025-04-21",
       testCase "defaultApiVersion" $
         unApiVersion defaultApiVersion @?= "2025-04-21",
       testGroup
@@ -110,6 +110,93 @@ tests =
                       W.workflowRunRejectionNote = Nothing
                     }
                 response = W.GetWorkflowRunResponse True workflowRun
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "ListWorkflowRunsResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "workflowRuns"
+                        .= [ Aeson.object
+                               [ "id" .= ("workflow_run_1" :: Text),
+                                 "status" .= ("PROCESSED" :: Text),
+                                 "workflowId" .= ("workflow_test" :: Text),
+                                 "workflowName" .= ("Test Workflow" :: Text),
+                                 "workflowVersionId" .= ("workflow_version_test" :: Text),
+                                 "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                 "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                 "reviewed" .= False
+                               ]
+                           ],
+                      "nextPageToken" .= ("next_page_token_test" :: Text)
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    W.listWorkflowRunsResponseSuccess r @?= True
+                    let workflowRuns = W.listWorkflowRunsResponseWorkflowRuns r
+                    length workflowRuns @?= 1
+                    case workflowRuns of
+                      (summary : _) -> do
+                        W.workflowRunSummaryId summary @?= "workflow_run_1"
+                        W.workflowRunSummaryStatus summary @?= W.Processed
+                        W.workflowRunSummaryWorkflowId summary @?= "workflow_test"
+                      [] -> assertFailure "Expected at least one workflow run"
+                    W.listWorkflowRunsResponseNextPageToken r @?= Just "next_page_token_test"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response with no nextPageToken deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "workflowRuns"
+                        .= [ Aeson.object
+                               [ "id" .= ("workflow_run_1" :: Text),
+                                 "status" .= ("PROCESSED" :: Text),
+                                 "workflowId" .= ("workflow_test" :: Text),
+                                 "workflowName" .= ("Test Workflow" :: Text),
+                                 "workflowVersionId" .= ("workflow_version_test" :: Text),
+                                 "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                 "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                 "reviewed" .= False
+                               ]
+                           ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    W.listWorkflowRunsResponseSuccess r @?= True
+                    length (W.listWorkflowRunsResponseWorkflowRuns r) @?= 1
+                    W.listWorkflowRunsResponseNextPageToken r @?= Nothing
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                workflowRunSummary =
+                  W.WorkflowRunSummary
+                    { W.workflowRunSummaryId = "workflow_run_summary_test",
+                      W.workflowRunSummaryStatus = W.Processed,
+                      W.workflowRunSummaryInitialRunAt = Just testTime,
+                      W.workflowRunSummaryReviewed = False,
+                      W.workflowRunSummaryStartTime = Just testTime,
+                      W.workflowRunSummaryWorkflowId = "workflow_test",
+                      W.workflowRunSummaryWorkflowName = "Test Workflow",
+                      W.workflowRunSummaryWorkflowVersionId = "workflow_version_test",
+                      W.workflowRunSummaryBatchId = Just "batch_test",
+                      W.workflowRunSummaryCreatedAt = testTime,
+                      W.workflowRunSummaryUpdatedAt = testTime,
+                      W.workflowRunSummaryName = Just "Test Workflow Run",
+                      W.workflowRunSummaryUrl = Just "https://example.com/workflow_run",
+                      W.workflowRunSummaryEndTime = Just testTime,
+                      W.workflowRunSummaryFiles = Nothing
+                    }
+                response =
+                  W.ListWorkflowRunsResponse
+                    { W.listWorkflowRunsResponseSuccess = True,
+                      W.listWorkflowRunsResponseWorkflowRuns = [workflowRunSummary],
+                      W.listWorkflowRunsResponseNextPageToken = Just "next_page_token_test"
+                    }
                 json = toJSON response
              in case fromJSON json of
                   Success r -> r @?= response
