@@ -166,9 +166,9 @@ runCommand token version env = \case
                   then Prelude.error "Local file processing not implemented yet"
                   else
                     Workflows.ExtendFile
-                      { Workflows.extendFileFileName = maybeFileName,
-                        Workflows.extendFileFileUrl = Just f,
-                        Workflows.extendFileFileId = Nothing,
+                      { Workflows.extendFileName = maybeFileName,
+                        Workflows.extendFileUrl = Just f,
+                        Workflows.extendFileId = Nothing,
                         Workflows.extendFileOutputs = Nothing
                       }
             )
