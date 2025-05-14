@@ -44,9 +44,6 @@ module Extend.Prelude
     -- * API version
     ApiVersion (..),
     defaultApiVersion,
-
-    -- * Utilities
-    tshow,
   )
 where
 
@@ -127,7 +124,3 @@ newtype ApiVersion = ApiVersion {unApiVersion :: Text}
 -- | Default API version - 2025-04-21
 defaultApiVersion :: ApiVersion
 defaultApiVersion = ApiVersion "2025-04-21"
-
--- | Convert a value to its 'Text' representation
-tshow :: (Show a) => a -> Text
-tshow = pack . show
