@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               extend
+name:               extend-ai
 version:            1.0.0
 synopsis:           Servant bindings to Extend AI
 description:        This package provides comprehensive and type-safe bindings
@@ -63,7 +63,7 @@ test-suite tasty
     hs-source-dirs:   tasty
     main-is:          Main.hs
     build-depends:    base
-                    , extend
+                    , extend-ai
                     , tasty
                     , tasty-hunit
                     , text
@@ -79,7 +79,7 @@ executable extend-example
     hs-source-dirs:   extend-example
     main-is:          Main.hs
     build-depends:    base
-                    , extend
+                    , extend-ai
                     , text
                     , aeson
                     , servant-client
