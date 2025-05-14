@@ -30,6 +30,9 @@ module Extend.V1.Workflows
     ListWorkflowRunsResponse (..),
     DocumentProcessorRun (..),
     MergedProcessor (..),
+    CreateWorkflowRequest (..),
+    CreateWorkflowResponse (..),
+    CreatedWorkflowObject (..),
 
     -- * API
     WorkflowsAPI,
@@ -38,6 +41,7 @@ module Extend.V1.Workflows
     batchRunWorkflow,
     getWorkflowRun,
     listWorkflowRuns,
+    createWorkflow,
   )
 where
 
@@ -1213,6 +1217,11 @@ type WorkflowsAPI =
     :> QueryParam "nextPageToken" Text
     :> QueryParam "maxPageSize" Int
     :> Get '[JSON] ListWorkflowRunsResponse
+    :<|> "workflows"
+    :> Header' '[Required, Strict] "Authorization" Text
+    :> Header' '[Required, Strict] "x-extend-api-version" Text
+    :> ReqBody '[JSON] CreateWorkflowRequest
+    :> Post '[JSON] CreateWorkflowResponse
 
 -- | Split the client functions for easier access
 workflowsAPI :: Proxy WorkflowsAPI
@@ -1223,7 +1232,8 @@ runWorkflowClient :: Text -> Text -> RunWorkflowRequest -> ClientM RunWorkflowRe
 batchRunWorkflowClient :: Text -> Text -> BatchRunWorkflowRequest -> ClientM BatchRunWorkflowResponse
 getWorkflowRunClient :: Text -> Text -> Text -> ClientM GetWorkflowRunResponse
 listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Int -> ClientM ListWorkflowRunsResponse
-getWorkflowClient :<|> runWorkflowClient :<|> batchRunWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
+createWorkflowClient :: Text -> Text -> CreateWorkflowRequest -> ClientM CreateWorkflowResponse
+getWorkflowClient :<|> runWorkflowClient :<|> batchRunWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient :<|> createWorkflowClient = client workflowsAPI
 
 -- | Get a workflow
 getWorkflow ::
@@ -1281,3 +1291,94 @@ listWorkflowRuns ::
   Maybe Int ->
   ClientM ListWorkflowRunsResponse
 listWorkflowRuns (ApiToken token) (ApiVersion version) = listWorkflowRunsClient ("Bearer " <> token) version
+
+-- | Request to create a workflow
+data CreateWorkflowRequest = CreateWorkflowRequest
+  { -- | The name of the workflow to create
+    createWorkflowRequestName :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance ToJSON CreateWorkflowRequest where
+  toJSON CreateWorkflowRequest {..} =
+    Aeson.object
+      [ "name" .= createWorkflowRequestName
+      ]
+
+instance FromJSON CreateWorkflowRequest where
+  parseJSON = Aeson.withObject "CreateWorkflowRequest" $ \v -> do
+    name <- v Aeson..: "name"
+    pure
+      CreateWorkflowRequest
+        { createWorkflowRequestName = name
+        }
+
+-- | Simplified workflow returned in create workflow response
+data CreatedWorkflowObject = CreatedWorkflowObject
+  { -- | Type of the object
+    createdWorkflowObjectType :: ObjectType,
+    -- | ID of the workflow
+    createdWorkflowObjectId :: Text,
+    -- | Version of the workflow
+    createdWorkflowObjectVersion :: Text,
+    -- | Name of the workflow
+    createdWorkflowObjectName :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON CreatedWorkflowObject where
+  parseJSON = Aeson.withObject "CreatedWorkflowObject" $ \v -> do
+    objectType <- v Aeson..: "object"
+    workflowId <- v Aeson..: "id"
+    version <- v Aeson..: "version"
+    name <- v Aeson..: "name"
+    pure
+      CreatedWorkflowObject
+        { createdWorkflowObjectType = objectType,
+          createdWorkflowObjectId = workflowId,
+          createdWorkflowObjectVersion = version,
+          createdWorkflowObjectName = name
+        }
+
+instance ToJSON CreatedWorkflowObject where
+  toJSON CreatedWorkflowObject {..} =
+    Aeson.object
+      [ "object" .= createdWorkflowObjectType,
+        "id" .= createdWorkflowObjectId,
+        "version" .= createdWorkflowObjectVersion,
+        "name" .= createdWorkflowObjectName
+      ]
+
+-- | Response from creating a workflow
+data CreateWorkflowResponse = CreateWorkflowResponse
+  { -- | Whether the request was successful
+    createWorkflowResponseSuccess :: Bool,
+    -- | The created workflow
+    createWorkflowResponseWorkflow :: CreatedWorkflowObject
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON CreateWorkflowResponse where
+  parseJSON = Aeson.withObject "CreateWorkflowResponse" $ \v -> do
+    success <- v Aeson..: "success"
+    workflow <- v Aeson..: "workflow"
+    pure
+      CreateWorkflowResponse
+        { createWorkflowResponseSuccess = success,
+          createWorkflowResponseWorkflow = workflow
+        }
+
+instance ToJSON CreateWorkflowResponse where
+  toJSON CreateWorkflowResponse {..} =
+    Aeson.object
+      [ "success" .= createWorkflowResponseSuccess,
+        "workflow" .= createWorkflowResponseWorkflow
+      ]
+
+-- | Create a workflow
+createWorkflow ::
+  ApiToken ->
+  ApiVersion ->
+  CreateWorkflowRequest ->
+  ClientM CreateWorkflowResponse
+createWorkflow (ApiToken token) (ApiVersion version) = createWorkflowClient ("Bearer " <> token) version

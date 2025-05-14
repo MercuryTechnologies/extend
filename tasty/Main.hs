@@ -277,5 +277,59 @@ tests =
              in case fromJSON json of
                   Success r -> r @?= response
                   Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "CreateWorkflowRequest"
+        [ testCase "Basic request serialization" $
+            let request =
+                  W.CreateWorkflowRequest
+                    "Test Workflow" -- name
+                json = toJSON request
+             in case fromJSON json of
+                  Success r ->
+                    let W.CreateWorkflowRequest name = r
+                     in name @?= "Test Workflow"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err
+        ],
+      testGroup
+        "CreateWorkflowResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "workflow"
+                        .= Aeson.object
+                          [ "object" .= ("workflow" :: Text),
+                            "id" .= ("workflow_test123" :: Text),
+                            "version" .= ("draft" :: Text),
+                            "name" .= ("Test Workflow" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    W.createWorkflowResponseSuccess r @?= True
+                    let workflow = W.createWorkflowResponseWorkflow r
+                    W.createdWorkflowObjectId workflow @?= "workflow_test123"
+                    W.createdWorkflowObjectVersion workflow @?= "draft"
+                    W.createdWorkflowObjectName workflow @?= "Test Workflow"
+                    W.createdWorkflowObjectType workflow @?= WorkflowObject
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let workflowObject =
+                  W.CreatedWorkflowObject
+                    { W.createdWorkflowObjectType = WorkflowObject,
+                      W.createdWorkflowObjectId = "workflow_test123",
+                      W.createdWorkflowObjectVersion = "draft",
+                      W.createdWorkflowObjectName = "Test Workflow"
+                    }
+                response =
+                  W.CreateWorkflowResponse
+                    { W.createWorkflowResponseSuccess = True,
+                      W.createWorkflowResponseWorkflow = workflowObject
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
         ]
     ]

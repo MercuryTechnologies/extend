@@ -25,6 +25,7 @@ data Command
   | BatchRunWorkflow Text [Text] Bool (Maybe Text) (Maybe Text) -- workflowId, fileUrls, isLocalFile flag, optional file name, optional version
   | ListWorkflowRuns (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int)
   | GetWorkflowRun Text
+  | CreateWorkflow Text -- workflow name
   deriving (Show)
 
 -- | Parse CLI arguments
@@ -75,6 +76,12 @@ commandParser =
           ( info
               (GetWorkflowRun <$> workflowRunIdArg)
               (progDesc "Get a specific workflow run by ID")
+          ),
+        command
+          "create-workflow"
+          ( info
+              (CreateWorkflow <$> workflowNameArg)
+              (progDesc "Create a new workflow with the specified name")
           )
       ]
 
@@ -124,6 +131,11 @@ limitOpt =
   option
     auto
     (long "limit" <> short 'l' <> metavar "LIMIT" <> help "Limit the number of results (sets maxPageSize parameter)")
+
+workflowNameArg :: Parser Text
+workflowNameArg =
+  strArgument
+    (metavar "NAME" <> help "Name for the new workflow")
 
 -- | Main entry point
 main :: IO ()
@@ -275,6 +287,15 @@ runCommand token version env = \case
   GetWorkflowRun runId -> do
     putStrLn $ "Getting workflow run: " ++ unpack runId
     Client.runClientM (getWorkflowRunCmd token version runId) env
+  CreateWorkflow workflowName -> do
+    putStrLn $ "Creating workflow: " ++ unpack workflowName
+
+    let request =
+          Workflows.CreateWorkflowRequest
+            { Workflows.createWorkflowRequestName = workflowName
+            }
+
+    Client.runClientM (createWorkflowCmd token version request) env
 
 -- | Command to run a workflow
 runWorkflowCmd :: ApiToken -> ApiVersion -> Workflows.RunWorkflowRequest -> Client.ClientM ()
@@ -417,6 +438,22 @@ batchRunWorkflowCmd token extendApiVersion request = do
     putStrLn $ "  extend-example list-runs --workflow-id " ++ unpack (Workflows.batchRunWorkflowRequestWorkflowId request)
     putStrLn "You can filter the results by looking for the batch ID in the output:"
     putStrLn $ "  Batch ID: " ++ unpack batchId
+
+-- | Command to create a workflow
+createWorkflowCmd :: ApiToken -> ApiVersion -> Workflows.CreateWorkflowRequest -> Client.ClientM ()
+createWorkflowCmd token extendApiVersion request = do
+  response <- Workflows.createWorkflow token extendApiVersion request
+  let Workflows.CreateWorkflowResponse
+        { Workflows.createWorkflowResponseSuccess = isSuccess,
+          Workflows.createWorkflowResponseWorkflow = workflow
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show isSuccess
+    putStrLn $ "Created workflow:"
+    putStrLn $ "  - ID: " ++ unpack (Workflows.createdWorkflowObjectId workflow)
+    putStrLn $ "  - Name: " ++ unpack (Workflows.createdWorkflowObjectName workflow)
+    putStrLn $ "  - Version: " ++ unpack (Workflows.createdWorkflowObjectVersion workflow)
+    putStrLn $ "  - Object Type: " ++ show (Workflows.createdWorkflowObjectType workflow)
 
 -- | CLI options
 opts :: ParserInfo Command
