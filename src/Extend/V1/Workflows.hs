@@ -617,11 +617,11 @@ instance ToJSON PredeterminedOutput where
 -- | File to process through a workflow
 data ExtendFile = ExtendFile
   { -- | The name of the file to be processed
-    extendFileFileName :: Maybe Text,
+    extendFileName :: Maybe Text,
     -- | A URL where the file can be downloaded from
-    extendFileFileUrl :: Maybe Text,
+    extendFileUrl :: Maybe Text,
     -- | Extend's internal ID for the file
-    extendFileFileId :: Maybe Text,
+    extendFileId :: Maybe Text,
     -- | Optional predetermined outputs to override generated outputs
     extendFileOutputs :: Maybe [PredeterminedOutput]
   }
@@ -635,9 +635,9 @@ instance FromJSON ExtendFile where
     outputs <- v Aeson..:? "outputs"
     pure
       ExtendFile
-        { extendFileFileName = fileName,
-          extendFileFileUrl = fileUrl,
-          extendFileFileId = fileId,
+        { extendFileName = fileName,
+          extendFileUrl = fileUrl,
+          extendFileId = fileId,
           extendFileOutputs = outputs
         }
 
@@ -645,9 +645,9 @@ instance ToJSON ExtendFile where
   toJSON ExtendFile {..} =
     Aeson.object $
       catMaybes
-        [ ("fileName" .=) <$> extendFileFileName,
-          ("fileUrl" .=) <$> extendFileFileUrl,
-          ("fileId" .=) <$> extendFileFileId,
+        [ ("fileName" .=) <$> extendFileName,
+          ("fileUrl" .=) <$> extendFileUrl,
+          ("fileId" .=) <$> extendFileId,
           ("outputs" .=) <$> extendFileOutputs
         ]
 
