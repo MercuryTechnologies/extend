@@ -22,6 +22,7 @@ import Prelude
 -- | CLI command options
 data Command
   = RunWorkflow Text [Text] Bool (Maybe Text) (Maybe Text) -- workflowId, fileUrls, isLocalFile flag, optional file name, optional version
+  | BatchRunWorkflow Text [Text] Bool (Maybe Text) (Maybe Text) -- workflowId, fileUrls, isLocalFile flag, optional file name, optional version
   | ListWorkflowRuns (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int)
   | GetWorkflowRun Text
   deriving (Show)
@@ -42,6 +43,18 @@ commandParser =
                   <*> optional (strOption (long "version" <> metavar "VERSION" <> help "Workflow version to run (e.g., '3' or 'draft')"))
               )
               (progDesc "Run a workflow with specified files (default: URLs)")
+          ),
+        command
+          "batch-run-workflow"
+          ( info
+              ( BatchRunWorkflow
+                  <$> workflowIdArg
+                  <*> many (strArgument (metavar "FILE" <> help "File URL or path to process"))
+                  <*> switch (long "local" <> help "Treat files as local file paths instead of URLs")
+                  <*> optional (strOption (long "filename" <> metavar "NAME" <> help "Name to use for the file(s)"))
+                  <*> optional (strOption (long "version" <> metavar "VERSION" <> help "Workflow version to run (e.g., '3' or 'draft')"))
+              )
+              (progDesc "Run a batch of workflows with specified files (default: URLs)")
           ),
         command
           "list-runs"
@@ -115,7 +128,7 @@ limitOpt =
 -- | Main entry point
 main :: IO ()
 main = do
-  command <- execParser opts
+  cliCommand <- execParser opts
 
   -- Get API key from environment variable
   maybeApiKey <- lookupEnv "EXTEND_API_KEY"
@@ -133,9 +146,8 @@ main = do
 
   -- Create API token and use default version
   let token = ApiToken apiKey
-      version = defaultApiVersion
 
-  result <- runCommand token version env command
+  result <- runCommand token defaultApiVersion env cliCommand
   case result of
     Left err -> do
       hPutStrLn stderr "API Error:"
@@ -184,6 +196,47 @@ runCommand token version env = \case
               Workflows.runWorkflowRequestVersion = maybeVersion
             }
     Client.runClientM (runWorkflowCmd token version request) env
+  BatchRunWorkflow extendWorkflowId filePaths isLocal maybeFileName maybeVersion -> do
+    putStrLn $ "Batch running workflow: " ++ unpack extendWorkflowId
+    when (isJust maybeVersion) $
+      putStrLn $
+        "Version: " ++ maybe "latest" unpack maybeVersion
+    putStrLn $ "Files: " ++ show filePaths
+    when (isJust maybeFileName) $
+      putStrLn $
+        "Using filename: " ++ maybe "" unpack maybeFileName
+    when (null filePaths) $
+      putStrLn "Warning: No files specified. This will create an empty batch workflow run."
+
+    -- Create input objects for the request
+    let inputs =
+          map
+            ( \f ->
+                let file =
+                      if isLocal
+                        then Prelude.error "Local file processing not implemented yet"
+                        else
+                          Workflows.BatchInputFile
+                            { Workflows.batchInputFileName = maybeFileName,
+                              Workflows.batchInputFileUrl = Just f,
+                              Workflows.batchInputFileId = Nothing
+                            }
+                 in Workflows.BatchWorkflowInput
+                      { Workflows.batchWorkflowInputFile = Just file,
+                        Workflows.batchWorkflowInputRawText = Nothing,
+                        Workflows.batchWorkflowInputMetadata = Nothing,
+                        Workflows.batchWorkflowInputSecrets = Nothing
+                      }
+            )
+            filePaths
+
+    let request =
+          Workflows.BatchRunWorkflowRequest
+            { Workflows.batchRunWorkflowRequestWorkflowId = extendWorkflowId,
+              Workflows.batchRunWorkflowRequestInputs = inputs,
+              Workflows.batchRunWorkflowRequestVersion = maybeVersion
+            }
+    Client.runClientM (batchRunWorkflowCmd token version request) env
   ListWorkflowRuns maybeWorkflowId maybeStatus maybeFileNameContains maybeSortBy maybeSortDir maybeNextPageToken maybeLimit -> do
     putStrLn "Listing workflow runs..."
 
@@ -269,14 +322,14 @@ listWorkflowRunsCmd token version maybeWorkflowId maybeStatus maybeFileNameConta
 
 -- | Command to get a specific workflow run
 getWorkflowRunCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()
-getWorkflowRunCmd token version runId = do
-  response <- getWorkflowRun token version runId
+getWorkflowRunCmd token extendApiVersion runId = do
+  response <- getWorkflowRun token extendApiVersion runId
   let Workflows.GetWorkflowRunResponse
-        { Workflows.getWorkflowRunResponseSuccess = success,
+        { Workflows.getWorkflowRunResponseSuccess = isSuccess,
           Workflows.getWorkflowRunResponseWorkflowRun = workflowRun
         } = response
   liftIO $ do
-    putStrLn $ "Success: " ++ show success
+    putStrLn $ "Success: " ++ show isSuccess
     printWorkflowRun workflowRun
 
 -- | Helper to print a workflow run
@@ -290,6 +343,11 @@ printWorkflowRun workflowRun = do
       case Workflows.workflowRunWorkflow workflowRun of
         Just workflow -> putStrLn $ "    Workflow: " ++ unpack (Workflows.workflowSummaryName workflow)
         Nothing -> putStrLn "    Workflow: (unknown)"
+
+  -- Display the batch ID if available
+  case Workflows.workflowRunBatchId workflowRun of
+    Just batchId -> putStrLn $ "    Batch ID: " ++ unpack batchId
+    Nothing -> pure ()
 
   -- Display timestamps if available
   case Workflows.workflowRunInitialRunAt workflowRun of
@@ -319,6 +377,11 @@ printWorkflowRunSummary workflowRun = do
   putStrLn $ "    Status: " ++ show (Workflows.workflowRunSummaryStatus workflowRun)
   putStrLn $ "    Workflow: " ++ unpack (Workflows.workflowRunSummaryWorkflowName workflowRun)
 
+  -- Display the batch ID if available
+  case Workflows.workflowRunSummaryBatchId workflowRun of
+    Just batchId -> putStrLn $ "    Batch ID: " ++ unpack batchId
+    Nothing -> pure ()
+
   -- Display timestamps if available
   putStrLn $ "    Created at: " ++ show (Workflows.workflowRunSummaryCreatedAt workflowRun)
 
@@ -337,6 +400,23 @@ printWorkflowRunSummary workflowRun = do
   putStrLn $ "    Reviewed: " ++ show (Workflows.workflowRunSummaryReviewed workflowRun)
 
   putStrLn ""
+
+-- | Command to run a batch workflow
+batchRunWorkflowCmd :: ApiToken -> ApiVersion -> Workflows.BatchRunWorkflowRequest -> Client.ClientM ()
+batchRunWorkflowCmd token extendApiVersion request = do
+  response <- Workflows.batchRunWorkflow token extendApiVersion request
+  let Workflows.BatchRunWorkflowResponse
+        { Workflows.batchRunWorkflowResponseSuccess = isSuccess,
+          Workflows.batchRunWorkflowResponseBatchId = batchId
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show isSuccess
+    putStrLn $ "Batch ID: " ++ unpack batchId
+    putStrLn "Workflow runs have been queued for processing."
+    putStrLn "To check the status of your batch workflow runs, use:"
+    putStrLn $ "  extend-example list-runs --workflow-id " ++ unpack (Workflows.batchRunWorkflowRequestWorkflowId request)
+    putStrLn "You can filter the results by looking for the batch ID in the output:"
+    putStrLn $ "  Batch ID: " ++ unpack batchId
 
 -- | CLI options
 opts :: ParserInfo Command

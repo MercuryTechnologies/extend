@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Data.Aeson (Result (Error, Success), fromJSON, toJSON, (.=))
-import qualified Data.Aeson as Aeson
+import qualified Data.Aeson as Aeson (object)
 import Data.Text (Text)
 import Data.Time.Calendar (Day (..))
 import Data.Time.Clock (UTCTime (..), secondsToDiffTime)
@@ -196,6 +196,82 @@ tests =
                     { W.listWorkflowRunsResponseSuccess = True,
                       W.listWorkflowRunsResponseWorkflowRuns = [workflowRunSummary],
                       W.listWorkflowRunsResponseNextPageToken = Just "next_page_token_test"
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "BatchRunWorkflowRequest"
+        [ testCase "Basic request serialization" $
+            let requestJson =
+                  Aeson.object
+                    [ "workflowId" .= ("workflow_test" :: Text),
+                      "inputs"
+                        .= [ Aeson.object
+                               [ "file"
+                                   .= Aeson.object
+                                     [ "fileName" .= ("test.pdf" :: Text),
+                                       "fileUrl" .= ("https://example.com/test.pdf" :: Text)
+                                     ]
+                               ]
+                           ],
+                      "version" .= ("1" :: Text)
+                    ]
+             in case fromJSON requestJson of
+                  Success r -> do
+                    W.batchRunWorkflowRequestWorkflowId r @?= "workflow_test"
+                    length (W.batchRunWorkflowRequestInputs r) @?= 1
+                    case W.batchRunWorkflowRequestInputs r of
+                      [input] -> do
+                        case W.batchWorkflowInputFile input of
+                          Just file -> do
+                            W.batchInputFileName file @?= Just "test.pdf"
+                            W.batchInputFileUrl file @?= Just "https://example.com/test.pdf"
+                          Nothing -> assertFailure "Expected file in input"
+                      _ -> assertFailure "Expected one input"
+                    W.batchRunWorkflowRequestVersion r @?= Just "1"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Request with raw text input" $
+            let requestJson =
+                  Aeson.object
+                    [ "workflowId" .= ("workflow_test" :: Text),
+                      "inputs"
+                        .= [ Aeson.object
+                               [ "rawText" .= ("Raw text content" :: Text)
+                               ]
+                           ]
+                    ]
+             in case fromJSON requestJson of
+                  Success r -> do
+                    W.batchRunWorkflowRequestWorkflowId r @?= "workflow_test"
+                    length (W.batchRunWorkflowRequestInputs r) @?= 1
+                    case W.batchRunWorkflowRequestInputs r of
+                      [input] -> do
+                        W.batchWorkflowInputRawText input @?= Just "Raw text content"
+                      _ -> assertFailure "Expected one input"
+                    W.batchRunWorkflowRequestVersion r @?= Nothing
+                  Error err -> assertFailure $ "Failed to parse: " ++ err
+        ],
+      testGroup
+        "BatchRunWorkflowResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "batchId" .= ("batch_test_id" :: Text)
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    W.batchRunWorkflowResponseSuccess r @?= True
+                    W.batchRunWorkflowResponseBatchId r @?= "batch_test_id"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let response =
+                  W.BatchRunWorkflowResponse
+                    { W.batchRunWorkflowResponseSuccess = True,
+                      W.batchRunWorkflowResponseBatchId = "batch_test_id"
                     }
                 json = toJSON response
              in case fromJSON json of

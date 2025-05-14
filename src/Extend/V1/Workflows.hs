@@ -22,6 +22,10 @@ module Extend.V1.Workflows
     GetWorkflowResponse (..),
     RunWorkflowRequest (..),
     RunWorkflowResponse (..),
+    BatchInputFile (..),
+    BatchWorkflowInput (..),
+    BatchRunWorkflowRequest (..),
+    BatchRunWorkflowResponse (..),
     GetWorkflowRunResponse (..),
     ListWorkflowRunsResponse (..),
     DocumentProcessorRun (..),
@@ -31,6 +35,7 @@ module Extend.V1.Workflows
     WorkflowsAPI,
     getWorkflow,
     runWorkflow,
+    batchRunWorkflow,
     getWorkflowRun,
     listWorkflowRuns,
   )
@@ -1047,6 +1052,133 @@ instance ToJSON ListWorkflowRunsResponse where
           ("nextPageToken" .=) <$> listWorkflowRunsResponseNextPageToken
         ]
 
+-- | File to process through a batch workflow
+data BatchInputFile = BatchInputFile
+  { -- | The name of the file to be processed
+    batchInputFileName :: Maybe Text,
+    -- | A URL where the file can be downloaded from
+    batchInputFileUrl :: Maybe Text,
+    -- | Extend's internal ID for the file
+    batchInputFileId :: Maybe Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON BatchInputFile where
+  parseJSON = Aeson.withObject "BatchInputFile" $ \v -> do
+    fileName <- v Aeson..:? "fileName"
+    fileUrl <- v Aeson..:? "fileUrl"
+    fileId <- v Aeson..:? "fileId"
+    pure
+      BatchInputFile
+        { batchInputFileName = fileName,
+          batchInputFileUrl = fileUrl,
+          batchInputFileId = fileId
+        }
+
+instance ToJSON BatchInputFile where
+  toJSON BatchInputFile {..} =
+    Aeson.object $
+      catMaybes
+        [ ("fileName" .=) <$> batchInputFileName,
+          ("fileUrl" .=) <$> batchInputFileUrl,
+          ("fileId" .=) <$> batchInputFileId
+        ]
+
+-- | Input for a batch workflow run
+data BatchWorkflowInput = BatchWorkflowInput
+  { -- | File to process
+    batchWorkflowInputFile :: Maybe BatchInputFile,
+    -- | Raw text to process as a file
+    batchWorkflowInputRawText :: Maybe Text,
+    -- | Optional metadata
+    batchWorkflowInputMetadata :: Maybe (Map Text Value),
+    -- | Optional secrets
+    batchWorkflowInputSecrets :: Maybe (Map Text Value)
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON BatchWorkflowInput where
+  parseJSON = Aeson.withObject "BatchWorkflowInput" $ \v -> do
+    file <- v Aeson..:? "file"
+    rawText <- v Aeson..:? "rawText"
+    metadata <- v Aeson..:? "metadata"
+    secrets <- v Aeson..:? "secrets"
+    pure
+      BatchWorkflowInput
+        { batchWorkflowInputFile = file,
+          batchWorkflowInputRawText = rawText,
+          batchWorkflowInputMetadata = metadata,
+          batchWorkflowInputSecrets = secrets
+        }
+
+instance ToJSON BatchWorkflowInput where
+  toJSON BatchWorkflowInput {..} =
+    Aeson.object $
+      catMaybes
+        [ ("file" .=) <$> batchWorkflowInputFile,
+          ("rawText" .=) <$> batchWorkflowInputRawText,
+          ("metadata" .=) <$> batchWorkflowInputMetadata,
+          ("secrets" .=) <$> batchWorkflowInputSecrets
+        ]
+
+-- | Request to run a batch of workflows
+data BatchRunWorkflowRequest = BatchRunWorkflowRequest
+  { -- | The ID of the workflow to run
+    batchRunWorkflowRequestWorkflowId :: Text,
+    -- | Array of inputs to process
+    batchRunWorkflowRequestInputs :: [BatchWorkflowInput],
+    -- | Optional version of the workflow to run
+    batchRunWorkflowRequestVersion :: Maybe Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance ToJSON BatchRunWorkflowRequest where
+  toJSON BatchRunWorkflowRequest {..} =
+    Aeson.object $
+      catMaybes
+        [ Just ("workflowId" .= batchRunWorkflowRequestWorkflowId),
+          Just ("inputs" .= batchRunWorkflowRequestInputs),
+          ("version" .=) <$> batchRunWorkflowRequestVersion
+        ]
+
+instance FromJSON BatchRunWorkflowRequest where
+  parseJSON = Aeson.withObject "BatchRunWorkflowRequest" $ \v -> do
+    workflowId <- v Aeson..: "workflowId"
+    inputs <- v Aeson..: "inputs"
+    version <- v Aeson..:? "version"
+    pure
+      BatchRunWorkflowRequest
+        { batchRunWorkflowRequestWorkflowId = workflowId,
+          batchRunWorkflowRequestInputs = inputs,
+          batchRunWorkflowRequestVersion = version
+        }
+
+-- | Response from batch running a workflow
+data BatchRunWorkflowResponse = BatchRunWorkflowResponse
+  { -- | Whether the request was successful
+    batchRunWorkflowResponseSuccess :: Bool,
+    -- | The batch ID
+    batchRunWorkflowResponseBatchId :: Text
+  }
+  deriving stock (Show, Eq, Generic)
+
+instance FromJSON BatchRunWorkflowResponse where
+  parseJSON = Aeson.withObject "BatchRunWorkflowResponse" $ \v -> do
+    success <- v Aeson..: "success"
+    batchId <- v Aeson..: "batchId"
+    pure
+      BatchRunWorkflowResponse
+        { batchRunWorkflowResponseSuccess = success,
+          batchRunWorkflowResponseBatchId = batchId
+        }
+
+instance ToJSON BatchRunWorkflowResponse where
+  toJSON BatchRunWorkflowResponse {..} =
+    Aeson.object
+      [ "success" .= batchRunWorkflowResponseSuccess,
+        "batchId" .= batchRunWorkflowResponseBatchId
+      ]
+
 -- | Workflows API endpoints
 type WorkflowsAPI =
   "workflows"
@@ -1059,6 +1191,12 @@ type WorkflowsAPI =
     :> Header' '[Required, Strict] "x-extend-api-version" Text
     :> ReqBody '[JSON] RunWorkflowRequest
     :> Post '[JSON] RunWorkflowResponse
+    :<|> "workflow_runs"
+    :> "batch"
+    :> Header' '[Required, Strict] "Authorization" Text
+    :> Header' '[Required, Strict] "x-extend-api-version" Text
+    :> ReqBody '[JSON] BatchRunWorkflowRequest
+    :> Post '[JSON] BatchRunWorkflowResponse
     :<|> "workflow_runs"
     :> Capture "runId" Text
     :> Header' '[Required, Strict] "Authorization" Text
@@ -1082,9 +1220,10 @@ workflowsAPI = Proxy
 
 getWorkflowClient :: Text -> Text -> Text -> ClientM GetWorkflowResponse
 runWorkflowClient :: Text -> Text -> RunWorkflowRequest -> ClientM RunWorkflowResponse
+batchRunWorkflowClient :: Text -> Text -> BatchRunWorkflowRequest -> ClientM BatchRunWorkflowResponse
 getWorkflowRunClient :: Text -> Text -> Text -> ClientM GetWorkflowRunResponse
 listWorkflowRunsClient :: Text -> Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Int -> ClientM ListWorkflowRunsResponse
-getWorkflowClient :<|> runWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
+getWorkflowClient :<|> runWorkflowClient :<|> batchRunWorkflowClient :<|> getWorkflowRunClient :<|> listWorkflowRunsClient = client workflowsAPI
 
 -- | Get a workflow
 getWorkflow ::
@@ -1103,6 +1242,14 @@ runWorkflow ::
   RunWorkflowRequest ->
   ClientM RunWorkflowResponse
 runWorkflow (ApiToken token) (ApiVersion version) = runWorkflowClient ("Bearer " <> token) version
+
+-- | Run a batch of workflows
+batchRunWorkflow ::
+  ApiToken ->
+  ApiVersion ->
+  BatchRunWorkflowRequest ->
+  ClientM BatchRunWorkflowResponse
+batchRunWorkflow (ApiToken token) (ApiVersion version) = batchRunWorkflowClient ("Bearer " <> token) version
 
 -- | Get a workflow run
 getWorkflowRun ::
