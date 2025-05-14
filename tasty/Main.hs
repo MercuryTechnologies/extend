@@ -2,9 +2,8 @@
 
 module Main (main) where
 
-import Data.Aeson (Result (Error, Success), fromJSON, toJSON)
+import Data.Aeson (Result (Error, Success), fromJSON, toJSON, (.=))
 import qualified Data.Aeson as Aeson
-import Data.ByteString.Lazy.Char8 (pack)
 import Data.Text (Text)
 import Data.Time.Calendar (Day (..))
 import Data.Time.Clock (UTCTime (..), secondsToDiffTime)
@@ -62,17 +61,24 @@ tests =
       testGroup
         "GetWorkflowRunResponse"
         [ testCase "Basic response deserialization" $
-            let jsonStr = "{\"success\":true,\"workflowRun\":{\"object\":\"workflow_run\",\"id\":\"workflow_run_test\",\"status\":\"PROCESSED\",\"reviewed\":false}}"
-                mValue = Aeson.decode (pack jsonStr)
-             in case mValue of
-                  Nothing -> assertFailure "Failed to decode JSON string"
-                  Just value -> case fromJSON value of
-                    Success r ->
-                      do
-                        W.getWorkflowRunResponseSuccess r @?= True
-                        W.workflowRunId (W.getWorkflowRunResponseWorkflowRun r) @?= "workflow_run_test"
-                        W.workflowRunStatus (W.getWorkflowRunResponseWorkflowRun r) @?= W.Processed
-                    Error err -> assertFailure $ "Failed to parse: " ++ err,
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "workflowRun"
+                        .= Aeson.object
+                          [ "object" .= ("workflow_run" :: Text),
+                            "id" .= ("workflow_run_test" :: Text),
+                            "status" .= ("PROCESSED" :: Text),
+                            "reviewed" .= False
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r ->
+                    do
+                      W.getWorkflowRunResponseSuccess r @?= True
+                      W.workflowRunId (W.getWorkflowRunResponseWorkflowRun r) @?= "workflow_run_test"
+                      W.workflowRunStatus (W.getWorkflowRunResponseWorkflowRun r) @?= W.Processed
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
           testCase "Response serialization/deserialization round trip" $
             let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
                 workflowRun =
