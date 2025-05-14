@@ -12,7 +12,7 @@ Add the package to your dependencies:
 
 ```cabal
 build-depends:
-    extend
+    extend-ai
 ```
 
 ## Usage
