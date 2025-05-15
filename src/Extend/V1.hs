@@ -37,19 +37,33 @@ module Extend.V1
     -- Processors
     Processor (..),
     ProcessorConfig (..),
+    ProcessorType (..),
     ProcessorRun (..),
     ProcessorRunStatus,
-    GetProcessorResponse (..),
-    ListProcessorsResponse (..),
+    ProcessorVersion (..),
+    ProcessorRunFileInput (..),
+    Extend.V1.Processors.MergedProcessor (..),
     RunProcessorRequest (..),
     RunProcessorResponse (..),
     GetProcessorRunResponse (..),
-    ListProcessorRunsResponse (..),
-    getProcessor,
-    listProcessors,
+    CreateProcessorRequest (..),
+    CreateProcessorResponse (..),
+    UpdateProcessorRequest (..),
+    UpdateProcessorResponse (..),
+    GetProcessorVersionResponse (..),
+    ListProcessorVersionsResponse (..),
+    PublishProcessorVersionRequest (..),
+    PublishProcessorVersionResponse (..),
+    BatchProcessorRun (..),
+    GetBatchProcessorRunResponse (..),
     runProcessor,
     getProcessorRun,
-    listProcessorRuns,
+    createProcessor,
+    updateProcessor,
+    getProcessorVersion,
+    listProcessorVersions,
+    publishProcessorVersion,
+    getBatchProcessorRun,
     -- Error and Common
     module Extend.V1.Error,
     module Extend.V1.Common,
@@ -63,7 +77,7 @@ import Extend.Prelude
 import Extend.V1.Common
 import Extend.V1.Error
 import Extend.V1.Files
-import Extend.V1.Processors hiding (Failed, Pending, Processed, Processing)
+import Extend.V1.Processors
 import Extend.V1.Workflows
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as TLS

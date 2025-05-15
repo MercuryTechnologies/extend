@@ -2,15 +2,72 @@
 
 module Main (main) where
 
-import Data.Aeson (Result (Error, Success), fromJSON, toJSON, (.=))
+import Data.Aeson (Result (Error, Success), ToJSON, Value, fromJSON, toJSON, (.=))
 import qualified Data.Aeson as Aeson (object)
 import Data.Text (Text)
 import Data.Time.Calendar (Day (..))
 import Data.Time.Clock (UTCTime (..), secondsToDiffTime)
 import Extend.V1
+import qualified Extend.V1.Processors as P
 import qualified Extend.V1.Workflows as W
 import Test.Tasty
 import Test.Tasty.HUnit
+
+instance ToJSON P.RunProcessorResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.runProcessorResponseSuccess r,
+        "processorRun" .= P.runProcessorResponseProcessorRun r
+      ]
+
+instance ToJSON P.GetProcessorRunResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.getProcessorRunResponseSuccess r,
+        "processorRun" .= P.getProcessorRunResponseProcessorRun r
+      ]
+
+instance ToJSON P.CreateProcessorResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.createProcessorResponseSuccess r,
+        "processor" .= P.createProcessorResponseProcessor r
+      ]
+
+instance ToJSON P.UpdateProcessorResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.updateProcessorResponseSuccess r,
+        "processor" .= P.updateProcessorResponseProcessor r
+      ]
+
+instance ToJSON P.GetProcessorVersionResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.getProcessorVersionResponseSuccess r,
+        "version" .= P.getProcessorVersionResponseVersion r
+      ]
+
+instance ToJSON P.ListProcessorVersionsResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.listProcessorVersionsResponseSuccess r,
+        "versions" .= P.listProcessorVersionsResponseVersions r
+      ]
+
+instance ToJSON P.PublishProcessorVersionResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.publishProcessorVersionResponseSuccess r,
+        "processorVersion" .= P.publishProcessorVersionResponseProcessorVersion r
+      ]
+
+instance ToJSON P.GetBatchProcessorRunResponse where
+  toJSON r =
+    Aeson.object
+      [ "success" .= P.getBatchProcessorRunResponseSuccess r,
+        "batchProcessorRun" .= P.getBatchProcessorRunResponseBatchProcessorRun r
+      ]
 
 main :: IO ()
 main = defaultMain tests
@@ -39,6 +96,42 @@ tests =
                 json = toJSON obj
                 parsed = fromJSON json
              in parsed @?= Success FileObject
+        ],
+      testGroup
+        "ProcessorType"
+        [ testCase "Extract JSON round trip" $
+            let processorType = P.Extract
+                json = toJSON processorType
+                parsed = fromJSON json
+             in parsed @?= Success P.Extract,
+          testCase "Classify JSON round trip" $
+            let processorType = P.Classify
+                json = toJSON processorType
+                parsed = fromJSON json
+             in parsed @?= Success P.Classify,
+          testCase "Splitter JSON round trip" $
+            let processorType = P.Splitter
+                json = toJSON processorType
+                parsed = fromJSON json
+             in parsed @?= Success P.Splitter
+        ],
+      testGroup
+        "ProcessorRunStatus"
+        [ testCase "Processing JSON round trip" $
+            let status = P.Processing
+                json = toJSON status
+                parsed = fromJSON json
+             in parsed @?= Success P.Processing,
+          testCase "Processed JSON round trip" $
+            let status = P.Processed
+                json = toJSON status
+                parsed = fromJSON json
+             in parsed @?= Success P.Processed,
+          testCase "Failed JSON round trip" $
+            let status = P.Failed
+                json = toJSON status
+                parsed = fromJSON json
+             in parsed @?= Success P.Failed
         ],
       testGroup
         "RunWorkflowRequest"
@@ -326,6 +419,676 @@ tests =
                   W.CreateWorkflowResponse
                     { W.createWorkflowResponseSuccess = True,
                       W.createWorkflowResponseWorkflow = workflowObject
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      -- Processor API tests
+      testGroup
+        "RunProcessorRequest"
+        [ testCase "Basic request serialization" $
+            let fileInput =
+                  P.ProcessorRunFileInput
+                    { P.processorRunFileInputFileName = Just "test.pdf",
+                      P.processorRunFileInputFileUrl = Just "https://example.com/test.pdf",
+                      P.processorRunFileInputFileId = Nothing
+                    }
+                request =
+                  P.RunProcessorRequest
+                    { P.runProcessorRequestProcessorId = "dp_test123",
+                      P.runProcessorRequestVersion = Just "1.0",
+                      P.runProcessorRequestFile = Just fileInput,
+                      P.runProcessorRequestRawText = Nothing,
+                      P.runProcessorRequestPriority = Just 10,
+                      P.runProcessorRequestMetadata = Nothing,
+                      P.runProcessorRequestConfig = Nothing
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.runProcessorRequestProcessorId r @?= "dp_test123"
+                    P.runProcessorRequestVersion r @?= Just "1.0"
+                    case P.runProcessorRequestFile r of
+                      Just file -> do
+                        P.processorRunFileInputFileName file @?= Just "test.pdf"
+                        P.processorRunFileInputFileUrl file @?= Just "https://example.com/test.pdf"
+                      Nothing -> assertFailure "Expected file input"
+                    P.runProcessorRequestPriority r @?= Just 10
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Request with raw text serialization" $
+            let request =
+                  P.RunProcessorRequest
+                    { P.runProcessorRequestProcessorId = "dp_test123",
+                      P.runProcessorRequestVersion = Nothing,
+                      P.runProcessorRequestFile = Nothing,
+                      P.runProcessorRequestRawText = Just "Raw text content",
+                      P.runProcessorRequestPriority = Nothing,
+                      P.runProcessorRequestMetadata = Nothing,
+                      P.runProcessorRequestConfig = Nothing
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.runProcessorRequestProcessorId r @?= "dp_test123"
+                    P.runProcessorRequestRawText r @?= Just "Raw text content"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err
+        ],
+      testGroup
+        "RunProcessorResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "processorRun"
+                        .= Aeson.object
+                          [ "object" .= ("document_processor_run" :: Text),
+                            "id" .= ("dpr_test123" :: Text),
+                            "processorId" .= ("dp_test123" :: Text),
+                            "processorVersionId" .= ("dpv_test123" :: Text),
+                            "processorName" .= ("Test Processor" :: Text),
+                            "status" .= ("PROCESSING" :: Text),
+                            "output" .= Aeson.object [],
+                            "reviewed" .= False,
+                            "edited" .= False,
+                            "edits" .= Aeson.object [],
+                            "type" .= ("EXTRACT" :: Text),
+                            "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                            "files" .= ([] :: [Value]),
+                            "mergedProcessors" .= ([] :: [Value]),
+                            "url" .= ("https://example.com/run" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.runProcessorResponseSuccess r @?= True
+                    let processorRun = P.runProcessorResponseProcessorRun r
+                    P.processorRunId processorRun @?= "dpr_test123"
+                    P.processorRunProcessorId processorRun @?= "dp_test123"
+                    P.processorRunProcessorVersionId processorRun @?= "dpv_test123"
+                    P.processorRunProcessorName processorRun @?= "Test Processor"
+                    P.processorRunStatus processorRun @?= P.Processing
+                    P.processorRunReviewed processorRun @?= False
+                    P.processorRunEdited processorRun @?= False
+                    P.processorRunType processorRun @?= Just "EXTRACT"
+                    P.processorRunUrl processorRun @?= Just "https://example.com/run"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let processorRun =
+                  P.ProcessorRun
+                    { P.processorRunObject = DocumentProcessorRunObject,
+                      P.processorRunId = "dpr_test123",
+                      P.processorRunProcessorId = "dp_test123",
+                      P.processorRunProcessorVersionId = "dpv_test123",
+                      P.processorRunProcessorName = "Test Processor",
+                      P.processorRunStatus = P.Processing,
+                      P.processorRunOutput = toJSON ([] :: [Int]),
+                      P.processorRunFailureReason = Nothing,
+                      P.processorRunFailureMessage = Nothing,
+                      P.processorRunMetadata = Nothing,
+                      P.processorRunReviewed = False,
+                      P.processorRunEdited = False,
+                      P.processorRunEdits = toJSON ([] :: [Int]),
+                      P.processorRunType = Just "EXTRACT",
+                      P.processorRunConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorRunInitialOutput = Nothing,
+                      P.processorRunReviewedOutput = Nothing,
+                      P.processorRunFiles = [],
+                      P.processorRunMergedProcessors = [],
+                      P.processorRunUrl = Just "https://example.com/run"
+                    }
+                response =
+                  P.RunProcessorResponse
+                    { P.runProcessorResponseSuccess = True,
+                      P.runProcessorResponseProcessorRun = processorRun
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "GetProcessorRunResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "processorRun"
+                        .= Aeson.object
+                          [ "object" .= ("document_processor_run" :: Text),
+                            "id" .= ("dpr_test123" :: Text),
+                            "processorId" .= ("dp_test123" :: Text),
+                            "processorVersionId" .= ("dpv_test123" :: Text),
+                            "processorName" .= ("Test Processor" :: Text),
+                            "status" .= ("PROCESSED" :: Text),
+                            "output" .= Aeson.object [],
+                            "reviewed" .= True,
+                            "edited" .= True,
+                            "edits" .= Aeson.object [],
+                            "type" .= ("EXTRACT" :: Text),
+                            "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                            "files" .= ([] :: [Value]),
+                            "mergedProcessors" .= ([] :: [Value]),
+                            "url" .= ("https://example.com/run" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.getProcessorRunResponseSuccess r @?= True
+                    let processorRun = P.getProcessorRunResponseProcessorRun r
+                    P.processorRunId processorRun @?= "dpr_test123"
+                    P.processorRunProcessorId processorRun @?= "dp_test123"
+                    P.processorRunStatus processorRun @?= P.Processed
+                    P.processorRunReviewed processorRun @?= True
+                    P.processorRunEdited processorRun @?= True
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let processorRun =
+                  P.ProcessorRun
+                    { P.processorRunObject = DocumentProcessorRunObject,
+                      P.processorRunId = "dpr_test123",
+                      P.processorRunProcessorId = "dp_test123",
+                      P.processorRunProcessorVersionId = "dpv_test123",
+                      P.processorRunProcessorName = "Test Processor",
+                      P.processorRunStatus = P.Processed,
+                      P.processorRunOutput = toJSON ([] :: [Int]),
+                      P.processorRunFailureReason = Nothing,
+                      P.processorRunFailureMessage = Nothing,
+                      P.processorRunMetadata = Nothing,
+                      P.processorRunReviewed = True,
+                      P.processorRunEdited = True,
+                      P.processorRunEdits = toJSON ([] :: [Int]),
+                      P.processorRunType = Just "EXTRACT",
+                      P.processorRunConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorRunInitialOutput = Nothing,
+                      P.processorRunReviewedOutput = Nothing,
+                      P.processorRunFiles = [],
+                      P.processorRunMergedProcessors = [],
+                      P.processorRunUrl = Just "https://example.com/run"
+                    }
+                response =
+                  P.GetProcessorRunResponse
+                    { P.getProcessorRunResponseSuccess = True,
+                      P.getProcessorRunResponseProcessorRun = processorRun
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "CreateProcessorRequest"
+        [ testCase "Basic request serialization" $
+            let request =
+                  P.CreateProcessorRequest
+                    { P.createProcessorRequestName = "Test Processor",
+                      P.createProcessorRequestType = P.Extract,
+                      P.createProcessorRequestCloneProcessorId = Nothing,
+                      P.createProcessorRequestConfig = Nothing
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.createProcessorRequestName r @?= "Test Processor"
+                    P.createProcessorRequestType r @?= P.Extract
+                    P.createProcessorRequestCloneProcessorId r @?= Nothing
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Request with cloneProcessorId serialization" $
+            let request =
+                  P.CreateProcessorRequest
+                    { P.createProcessorRequestName = "Test Processor Clone",
+                      P.createProcessorRequestType = P.Classify,
+                      P.createProcessorRequestCloneProcessorId = Just "dp_source123",
+                      P.createProcessorRequestConfig = Nothing
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.createProcessorRequestName r @?= "Test Processor Clone"
+                    P.createProcessorRequestType r @?= P.Classify
+                    P.createProcessorRequestCloneProcessorId r @?= Just "dp_source123"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err
+        ],
+      testGroup
+        "CreateProcessorResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "processor"
+                        .= Aeson.object
+                          [ "object" .= ("document_processor" :: Text),
+                            "id" .= ("dp_test123" :: Text),
+                            "name" .= ("Test Processor" :: Text),
+                            "type" .= ("EXTRACT" :: Text),
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "draftVersion"
+                              .= Aeson.object
+                                [ "object" .= ("document_processor_version" :: Text),
+                                  "id" .= ("dpv_test123" :: Text),
+                                  "processorId" .= ("dp_test123" :: Text),
+                                  "processorType" .= ("EXTRACT" :: Text),
+                                  "version" .= ("draft" :: Text),
+                                  "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                                  "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                  "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                                ]
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.createProcessorResponseSuccess r @?= True
+                    let processor = P.createProcessorResponseProcessor r
+                    P.processorId processor @?= "dp_test123"
+                    P.processorName processor @?= "Test Processor"
+                    P.processorType processor @?= P.Extract
+                    case P.processorDraftVersion processor of
+                      Just draftVersion -> do
+                        P.processorVersionId draftVersion @?= "dpv_test123"
+                        P.processorVersionVersion draftVersion @?= "draft"
+                      Nothing -> assertFailure "Expected draft version"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                processorVersion =
+                  P.ProcessorVersion
+                    { P.processorVersionObject = DocumentProcessorVersionObject,
+                      P.processorVersionId = "dpv_test123",
+                      P.processorVersionProcessorId = "dp_test123",
+                      P.processorVersionProcessorName = Just "Test Processor",
+                      P.processorVersionProcessorType = P.Extract,
+                      P.processorVersionDescription = Nothing,
+                      P.processorVersionVersion = "draft",
+                      P.processorVersionConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorVersionCreatedAt = testTime,
+                      P.processorVersionUpdatedAt = testTime
+                    }
+                processor =
+                  P.Processor
+                    { P.processorObject = DocumentProcessorObject,
+                      P.processorId = "dp_test123",
+                      P.processorName = "Test Processor",
+                      P.processorType = P.Extract,
+                      P.processorCreatedAt = testTime,
+                      P.processorUpdatedAt = testTime,
+                      P.processorDraftVersion = Just processorVersion
+                    }
+                response =
+                  P.CreateProcessorResponse
+                    { P.createProcessorResponseSuccess = True,
+                      P.createProcessorResponseProcessor = processor
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "UpdateProcessorRequest"
+        [ testCase "Basic request serialization" $
+            let request =
+                  P.UpdateProcessorRequest
+                    { P.updateProcessorRequestName = Just "Updated Processor Name",
+                      P.updateProcessorRequestConfig = Nothing
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.updateProcessorRequestName r @?= Just "Updated Processor Name"
+                    P.updateProcessorRequestConfig r @?= Nothing
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Request with config serialization" $
+            let config = P.ProcessorConfig (toJSON ([] :: [Int]))
+                request =
+                  P.UpdateProcessorRequest
+                    { P.updateProcessorRequestName = Nothing,
+                      P.updateProcessorRequestConfig = Just config
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.updateProcessorRequestName r @?= Nothing
+                    P.updateProcessorRequestConfig r @?= Just config
+                  Error err -> assertFailure $ "Failed to parse: " ++ err
+        ],
+      testGroup
+        "UpdateProcessorResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "processor"
+                        .= Aeson.object
+                          [ "object" .= ("document_processor" :: Text),
+                            "id" .= ("dp_test123" :: Text),
+                            "name" .= ("Updated Processor Name" :: Text),
+                            "type" .= ("EXTRACT" :: Text),
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "draftVersion"
+                              .= Aeson.object
+                                [ "object" .= ("document_processor_version" :: Text),
+                                  "id" .= ("dpv_test123" :: Text),
+                                  "processorId" .= ("dp_test123" :: Text),
+                                  "processorType" .= ("EXTRACT" :: Text),
+                                  "version" .= ("draft" :: Text),
+                                  "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                                  "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                  "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                                ]
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.updateProcessorResponseSuccess r @?= True
+                    let processor = P.updateProcessorResponseProcessor r
+                    P.processorName processor @?= "Updated Processor Name"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                processorVersion =
+                  P.ProcessorVersion
+                    { P.processorVersionObject = DocumentProcessorVersionObject,
+                      P.processorVersionId = "dpv_test123",
+                      P.processorVersionProcessorId = "dp_test123",
+                      P.processorVersionProcessorName = Just "Updated Processor Name",
+                      P.processorVersionProcessorType = P.Extract,
+                      P.processorVersionDescription = Nothing,
+                      P.processorVersionVersion = "draft",
+                      P.processorVersionConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorVersionCreatedAt = testTime,
+                      P.processorVersionUpdatedAt = testTime
+                    }
+                processor =
+                  P.Processor
+                    { P.processorObject = DocumentProcessorObject,
+                      P.processorId = "dp_test123",
+                      P.processorName = "Updated Processor Name",
+                      P.processorType = P.Extract,
+                      P.processorCreatedAt = testTime,
+                      P.processorUpdatedAt = testTime,
+                      P.processorDraftVersion = Just processorVersion
+                    }
+                response =
+                  P.UpdateProcessorResponse
+                    { P.updateProcessorResponseSuccess = True,
+                      P.updateProcessorResponseProcessor = processor
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "GetProcessorVersionResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "version"
+                        .= Aeson.object
+                          [ "object" .= ("document_processor_version" :: Text),
+                            "id" .= ("dpv_test123" :: Text),
+                            "processorId" .= ("dp_test123" :: Text),
+                            "processorType" .= ("EXTRACT" :: Text),
+                            "version" .= ("1.0" :: Text),
+                            "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.getProcessorVersionResponseSuccess r @?= True
+                    let version = P.getProcessorVersionResponseVersion r
+                    P.processorVersionId version @?= "dpv_test123"
+                    P.processorVersionVersion version @?= "1.0"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                processorVersion =
+                  P.ProcessorVersion
+                    { P.processorVersionObject = DocumentProcessorVersionObject,
+                      P.processorVersionId = "dpv_test123",
+                      P.processorVersionProcessorId = "dp_test123",
+                      P.processorVersionProcessorName = Just "Test Processor",
+                      P.processorVersionProcessorType = P.Extract,
+                      P.processorVersionDescription = Just "Version description",
+                      P.processorVersionVersion = "1.0",
+                      P.processorVersionConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorVersionCreatedAt = testTime,
+                      P.processorVersionUpdatedAt = testTime
+                    }
+                response =
+                  P.GetProcessorVersionResponse
+                    { P.getProcessorVersionResponseSuccess = True,
+                      P.getProcessorVersionResponseVersion = processorVersion
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "ListProcessorVersionsResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "versions"
+                        .= [ Aeson.object
+                               [ "object" .= ("document_processor_version" :: Text),
+                                 "id" .= ("dpv_test123" :: Text),
+                                 "processorId" .= ("dp_test123" :: Text),
+                                 "processorType" .= ("EXTRACT" :: Text),
+                                 "version" .= ("1.0" :: Text),
+                                 "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                                 "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                 "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                               ],
+                             Aeson.object
+                               [ "object" .= ("document_processor_version" :: Text),
+                                 "id" .= ("dpv_draft" :: Text),
+                                 "processorId" .= ("dp_test123" :: Text),
+                                 "processorType" .= ("EXTRACT" :: Text),
+                                 "version" .= ("draft" :: Text),
+                                 "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                                 "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                                 "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                               ]
+                           ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.listProcessorVersionsResponseSuccess r @?= True
+                    let versions = P.listProcessorVersionsResponseVersions r
+                    length versions @?= 2
+                    case versions of
+                      (v1 : v2 : _) -> do
+                        P.processorVersionId v1 @?= "dpv_test123"
+                        P.processorVersionVersion v1 @?= "1.0"
+                        P.processorVersionId v2 @?= "dpv_draft"
+                        P.processorVersionVersion v2 @?= "draft"
+                      _ -> assertFailure "Expected two versions"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                processorVersion1 =
+                  P.ProcessorVersion
+                    { P.processorVersionObject = DocumentProcessorVersionObject,
+                      P.processorVersionId = "dpv_test123",
+                      P.processorVersionProcessorId = "dp_test123",
+                      P.processorVersionProcessorName = Just "Test Processor",
+                      P.processorVersionProcessorType = P.Extract,
+                      P.processorVersionDescription = Just "Version description",
+                      P.processorVersionVersion = "1.0",
+                      P.processorVersionConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorVersionCreatedAt = testTime,
+                      P.processorVersionUpdatedAt = testTime
+                    }
+                processorVersion2 =
+                  P.ProcessorVersion
+                    { P.processorVersionObject = DocumentProcessorVersionObject,
+                      P.processorVersionId = "dpv_draft",
+                      P.processorVersionProcessorId = "dp_test123",
+                      P.processorVersionProcessorName = Just "Test Processor",
+                      P.processorVersionProcessorType = P.Extract,
+                      P.processorVersionDescription = Nothing,
+                      P.processorVersionVersion = "draft",
+                      P.processorVersionConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorVersionCreatedAt = testTime,
+                      P.processorVersionUpdatedAt = testTime
+                    }
+                response =
+                  P.ListProcessorVersionsResponse
+                    { P.listProcessorVersionsResponseSuccess = True,
+                      P.listProcessorVersionsResponseVersions = [processorVersion1, processorVersion2]
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "PublishProcessorVersionRequest"
+        [ testCase "Basic request serialization" $
+            let request =
+                  P.PublishProcessorVersionRequest
+                    { P.publishProcessorVersionRequestReleaseType = "major",
+                      P.publishProcessorVersionRequestDescription = Just "Version 2.0 release",
+                      P.publishProcessorVersionRequestConfig = Nothing
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.publishProcessorVersionRequestReleaseType r @?= "major"
+                    P.publishProcessorVersionRequestDescription r @?= Just "Version 2.0 release"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Request with config serialization" $
+            let config = P.ProcessorConfig (toJSON ([] :: [Int]))
+                request =
+                  P.PublishProcessorVersionRequest
+                    { P.publishProcessorVersionRequestReleaseType = "minor",
+                      P.publishProcessorVersionRequestDescription = Nothing,
+                      P.publishProcessorVersionRequestConfig = Just config
+                    }
+                json = toJSON request
+             in case fromJSON json of
+                  Success r -> do
+                    P.publishProcessorVersionRequestReleaseType r @?= "minor"
+                    P.publishProcessorVersionRequestConfig r @?= Just config
+                  Error err -> assertFailure $ "Failed to parse: " ++ err
+        ],
+      testGroup
+        "PublishProcessorVersionResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "processorVersion"
+                        .= Aeson.object
+                          [ "object" .= ("document_processor_version" :: Text),
+                            "id" .= ("dpv_published" :: Text),
+                            "processorId" .= ("dp_test123" :: Text),
+                            "processorType" .= ("EXTRACT" :: Text),
+                            "description" .= ("Version 2.0 release" :: Text),
+                            "version" .= ("2.0" :: Text),
+                            "config" .= Aeson.object ["type" .= ("EXTRACT" :: Text)],
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.publishProcessorVersionResponseSuccess r @?= True
+                    let version = P.publishProcessorVersionResponseProcessorVersion r
+                    P.processorVersionId version @?= "dpv_published"
+                    P.processorVersionVersion version @?= "2.0"
+                    P.processorVersionDescription version @?= Just "Version 2.0 release"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                processorVersion =
+                  P.ProcessorVersion
+                    { P.processorVersionObject = DocumentProcessorVersionObject,
+                      P.processorVersionId = "dpv_published",
+                      P.processorVersionProcessorId = "dp_test123",
+                      P.processorVersionProcessorName = Just "Test Processor",
+                      P.processorVersionProcessorType = P.Extract,
+                      P.processorVersionDescription = Just "Version 2.0 release",
+                      P.processorVersionVersion = "2.0",
+                      P.processorVersionConfig = P.ProcessorConfig (toJSON ([] :: [Int])),
+                      P.processorVersionCreatedAt = testTime,
+                      P.processorVersionUpdatedAt = testTime
+                    }
+                response =
+                  P.PublishProcessorVersionResponse
+                    { P.publishProcessorVersionResponseSuccess = True,
+                      P.publishProcessorVersionResponseProcessorVersion = processorVersion
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "GetBatchProcessorRunResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "batchProcessorRun"
+                        .= Aeson.object
+                          [ "object" .= ("batch_processor_run" :: Text),
+                            "id" .= ("bpr_test123" :: Text),
+                            "processorId" .= ("dp_test123" :: Text),
+                            "processorVersionId" .= ("dpv_test123" :: Text),
+                            "processorName" .= ("Test Processor" :: Text),
+                            "metrics" .= Aeson.object ["numFiles" .= (10 :: Int)],
+                            "status" .= ("PROCESSED" :: Text),
+                            "source" .= ("EVAL_SET" :: Text),
+                            "sourceId" .= ("ev_test123" :: Text),
+                            "runCount" .= (10 :: Int),
+                            "options" .= Aeson.object [],
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    P.getBatchProcessorRunResponseSuccess r @?= True
+                    let batchRun = P.getBatchProcessorRunResponseBatchProcessorRun r
+                    P.batchProcessorRunId batchRun @?= "bpr_test123"
+                    P.batchProcessorRunProcessorId batchRun @?= "dp_test123"
+                    P.batchProcessorRunStatus batchRun @?= "PROCESSED"
+                    P.batchProcessorRunSource batchRun @?= "EVAL_SET"
+                    P.batchProcessorRunSourceId batchRun @?= Just "ev_test123"
+                    P.batchProcessorRunRunCount batchRun @?= 10
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                batchProcessorRun =
+                  P.BatchProcessorRun
+                    { P.batchProcessorRunObject = BatchProcessorRunObject,
+                      P.batchProcessorRunId = "bpr_test123",
+                      P.batchProcessorRunProcessorId = "dp_test123",
+                      P.batchProcessorRunProcessorVersionId = "dpv_test123",
+                      P.batchProcessorRunProcessorName = "Test Processor",
+                      P.batchProcessorRunMetrics = toJSON ([] :: [Int]),
+                      P.batchProcessorRunStatus = "PROCESSED",
+                      P.batchProcessorRunSource = "EVAL_SET",
+                      P.batchProcessorRunSourceId = Just "ev_test123",
+                      P.batchProcessorRunRunCount = 10,
+                      P.batchProcessorRunOptions = toJSON ([] :: [Int]),
+                      P.batchProcessorRunCreatedAt = testTime,
+                      P.batchProcessorRunUpdatedAt = testTime
+                    }
+                response =
+                  P.GetBatchProcessorRunResponse
+                    { P.getBatchProcessorRunResponseSuccess = True,
+                      P.getBatchProcessorRunResponseBatchProcessorRun = batchProcessorRun
                     }
                 json = toJSON response
              in case fromJSON json of

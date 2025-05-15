@@ -9,6 +9,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (isJust)
 import Data.Text (Text, pack, unpack)
 import Extend.V1
+import qualified Extend.V1.Processors as Processors
 import qualified Extend.V1.Workflows as Workflows
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Client.TLS as HTTPS
@@ -26,6 +27,14 @@ data Command
   | ListWorkflowRuns (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Text) (Maybe Int)
   | GetWorkflowRun Text
   | CreateWorkflow Text -- workflow name
+  | RunProcessor Text Text Bool (Maybe Text) -- processorId, fileUrl/path, isLocalFile flag, optional version
+  | GetProcessorRun Text -- processor run ID
+  | CreateProcessor Text Text -- processor name, processor type (EXTRACT, CLASSIFY, SPLITTER)
+  | UpdateProcessor Text Text -- processor ID, new name
+  | GetProcessorVersion Text Text -- processor ID, processor version ID
+  | ListProcessorVersions Text -- processor ID
+  | PublishProcessorVersion Text Text (Maybe Text) -- processor ID, release type (major/minor), optional description
+  | GetBatchProcessorRun Text -- batch processor run ID
   deriving (Show)
 
 -- | Parse CLI arguments
@@ -82,6 +91,72 @@ commandParser =
           ( info
               (CreateWorkflow <$> workflowNameArg)
               (progDesc "Create a new workflow with the specified name")
+          ),
+        command
+          "run-processor"
+          ( info
+              ( RunProcessor
+                  <$> processorIdArg
+                  <*> fileArg
+                  <*> switch (long "local" <> help "Treat file as a local file path instead of URL")
+                  <*> optional (strOption (long "version" <> metavar "VERSION" <> help "Processor version to run (e.g., 'latest' or 'draft')"))
+              )
+              (progDesc "Run a processor with a specified file")
+          ),
+        command
+          "get-processor-run"
+          ( info
+              (GetProcessorRun <$> processorRunIdArg)
+              (progDesc "Get details about a processor run")
+          ),
+        command
+          "create-processor"
+          ( info
+              ( CreateProcessor
+                  <$> processorNameArg
+                  <*> processorTypeArg
+              )
+              (progDesc "Create a new processor")
+          ),
+        command
+          "update-processor"
+          ( info
+              ( UpdateProcessor
+                  <$> processorIdArg
+                  <*> processorNameArg
+              )
+              (progDesc "Update an existing processor")
+          ),
+        command
+          "get-processor-version"
+          ( info
+              ( GetProcessorVersion
+                  <$> processorIdArg
+                  <*> processorVersionIdArg
+              )
+              (progDesc "Get a specific processor version")
+          ),
+        command
+          "list-processor-versions"
+          ( info
+              (ListProcessorVersions <$> processorIdArg)
+              (progDesc "List all versions of a processor")
+          ),
+        command
+          "publish-processor-version"
+          ( info
+              ( PublishProcessorVersion
+                  <$> processorIdArg
+                  <*> releaseTypeArg
+                  <*> optional (strOption (long "description" <> metavar "DESCRIPTION" <> help "Description of the changes in this version"))
+              )
+              (progDesc "Publish a new version of a processor")
+          ),
+        command
+          "get-batch-processor-run"
+          ( info
+              (GetBatchProcessorRun <$> batchProcessorRunIdArg)
+              (progDesc "Get details about a batch processor run")
           )
       ]
 
@@ -136,6 +211,47 @@ workflowNameArg :: Parser Text
 workflowNameArg =
   strArgument
     (metavar "NAME" <> help "Name for the new workflow")
+
+-- | Additional arguments for processor commands
+processorIdArg :: Parser Text
+processorIdArg =
+  strArgument
+    (metavar "PROCESSOR_ID" <> help "Processor ID")
+
+fileArg :: Parser Text
+fileArg =
+  strArgument
+    (metavar "FILE" <> help "File URL or path to process")
+
+processorRunIdArg :: Parser Text
+processorRunIdArg =
+  strArgument
+    (metavar "PROCESSOR_RUN_ID" <> help "Processor run ID")
+
+processorNameArg :: Parser Text
+processorNameArg =
+  strArgument
+    (metavar "NAME" <> help "Name for the processor")
+
+processorTypeArg :: Parser Text
+processorTypeArg =
+  strArgument
+    (metavar "TYPE" <> help "Type of processor (EXTRACT, CLASSIFY, SPLITTER)")
+
+processorVersionIdArg :: Parser Text
+processorVersionIdArg =
+  strArgument
+    (metavar "VERSION_ID" <> help "Processor version ID")
+
+releaseTypeArg :: Parser Text
+releaseTypeArg =
+  strArgument
+    (metavar "RELEASE_TYPE" <> help "Release type (major or minor)")
+
+batchProcessorRunIdArg :: Parser Text
+batchProcessorRunIdArg =
+  strArgument
+    (metavar "BATCH_PROCESSOR_RUN_ID" <> help "Batch processor run ID")
 
 -- | Main entry point
 main :: IO ()
@@ -296,6 +412,90 @@ runCommand token version env = \case
             }
 
     Client.runClientM (createWorkflowCmd token version request) env
+  RunProcessor processorId filePath isLocal maybeVersion -> do
+    putStrLn $ "Running processor: " ++ unpack processorId
+    when (isJust maybeVersion) $
+      putStrLn $
+        "Version: " ++ maybe "latest" unpack maybeVersion
+    putStrLn $ "File: " ++ unpack filePath
+
+    -- Create file input for the request
+    let file =
+          if isLocal
+            then Prelude.error "Local file processing not implemented yet"
+            else
+              Processors.ProcessorRunFileInput
+                { Processors.processorRunFileInputFileName = Nothing,
+                  Processors.processorRunFileInputFileUrl = Just filePath,
+                  Processors.processorRunFileInputFileId = Nothing
+                }
+
+    let request =
+          Processors.RunProcessorRequest
+            { Processors.runProcessorRequestProcessorId = processorId,
+              Processors.runProcessorRequestVersion = maybeVersion,
+              Processors.runProcessorRequestFile = Just file,
+              Processors.runProcessorRequestRawText = Nothing,
+              Processors.runProcessorRequestPriority = Nothing,
+              Processors.runProcessorRequestMetadata = Nothing,
+              Processors.runProcessorRequestConfig = Nothing
+            }
+    Client.runClientM (runProcessorCmd token version request) env
+  GetProcessorRun runId -> do
+    putStrLn $ "Getting processor run: " ++ unpack runId
+    Client.runClientM (getProcessorRunCmd token version runId) env
+  CreateProcessor name type_ -> do
+    putStrLn $ "Creating processor: " ++ unpack name
+    putStrLn $ "Type: " ++ unpack type_
+
+    let processorType = case unpack type_ of
+          "EXTRACT" -> Processors.Extract
+          "CLASSIFY" -> Processors.Classify
+          "SPLITTER" -> Processors.Splitter
+          _ -> Prelude.error $ "Unknown processor type: " ++ unpack type_
+
+    let request =
+          Processors.CreateProcessorRequest
+            { Processors.createProcessorRequestName = name,
+              Processors.createProcessorRequestType = processorType,
+              Processors.createProcessorRequestCloneProcessorId = Nothing,
+              Processors.createProcessorRequestConfig = Nothing
+            }
+    Client.runClientM (createProcessorCmd token version request) env
+  UpdateProcessor processorId name -> do
+    putStrLn $ "Updating processor: " ++ unpack processorId
+    putStrLn $ "New name: " ++ unpack name
+
+    let request =
+          Processors.UpdateProcessorRequest
+            { Processors.updateProcessorRequestName = Just name,
+              Processors.updateProcessorRequestConfig = Nothing
+            }
+    Client.runClientM (updateProcessorCmd token version processorId request) env
+  GetProcessorVersion processorId versionId -> do
+    putStrLn $ "Getting processor version: " ++ unpack processorId
+    putStrLn $ "Version ID: " ++ unpack versionId
+    Client.runClientM (getProcessorVersionCmd token version processorId versionId) env
+  ListProcessorVersions processorId -> do
+    putStrLn $ "Listing processor versions: " ++ unpack processorId
+    Client.runClientM (listProcessorVersionsCmd token version processorId) env
+  PublishProcessorVersion processorId releaseType maybeDescription -> do
+    putStrLn $ "Publishing processor version: " ++ unpack processorId
+    putStrLn $ "Release type: " ++ unpack releaseType
+    when (isJust maybeDescription) $
+      putStrLn $
+        "Description: " ++ maybe "" unpack maybeDescription
+
+    let request =
+          Processors.PublishProcessorVersionRequest
+            { Processors.publishProcessorVersionRequestReleaseType = releaseType,
+              Processors.publishProcessorVersionRequestDescription = maybeDescription,
+              Processors.publishProcessorVersionRequestConfig = Nothing
+            }
+    Client.runClientM (publishProcessorVersionCmd token version processorId request) env
+  GetBatchProcessorRun batchRunId -> do
+    putStrLn $ "Getting batch processor run: " ++ unpack batchRunId
+    Client.runClientM (getBatchProcessorRunCmd token version batchRunId) env
 
 -- | Command to run a workflow
 runWorkflowCmd :: ApiToken -> ApiVersion -> Workflows.RunWorkflowRequest -> Client.ClientM ()
@@ -470,3 +670,173 @@ createClientEnv :: String -> IO Client.ClientEnv
 createClientEnv baseUrl = do
   manager <- HTTP.newManager HTTPS.tlsManagerSettings
   pure $ Client.mkClientEnv manager (Client.BaseUrl Client.Https baseUrl 443 "")
+
+-- | Command to run a processor
+runProcessorCmd :: ApiToken -> ApiVersion -> Processors.RunProcessorRequest -> Client.ClientM ()
+runProcessorCmd token version request = do
+  response <- Processors.runProcessor token version request
+  let Processors.RunProcessorResponse
+        { Processors.runProcessorResponseSuccess = success,
+          Processors.runProcessorResponseProcessorRun = processorRun
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printProcessorRun processorRun
+
+-- | Command to get a processor run
+getProcessorRunCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()
+getProcessorRunCmd token version runId = do
+  response <- Processors.getProcessorRun token version runId
+  let Processors.GetProcessorRunResponse
+        { Processors.getProcessorRunResponseSuccess = success,
+          Processors.getProcessorRunResponseProcessorRun = processorRun
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printProcessorRun processorRun
+
+-- | Command to create a processor
+createProcessorCmd :: ApiToken -> ApiVersion -> Processors.CreateProcessorRequest -> Client.ClientM ()
+createProcessorCmd token version request = do
+  response <- Processors.createProcessor token version request
+  let Processors.CreateProcessorResponse
+        { Processors.createProcessorResponseSuccess = success,
+          Processors.createProcessorResponseProcessor = processor
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printProcessor processor
+
+-- | Command to update a processor
+updateProcessorCmd :: ApiToken -> ApiVersion -> Text -> Processors.UpdateProcessorRequest -> Client.ClientM ()
+updateProcessorCmd token version processorId request = do
+  response <- Processors.updateProcessor token version processorId request
+  let Processors.UpdateProcessorResponse
+        { Processors.updateProcessorResponseSuccess = success,
+          Processors.updateProcessorResponseProcessor = processor
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printProcessor processor
+
+-- | Command to get a processor version
+getProcessorVersionCmd :: ApiToken -> ApiVersion -> Text -> Text -> Client.ClientM ()
+getProcessorVersionCmd token version processorId versionId = do
+  response <- Processors.getProcessorVersion token version processorId versionId
+  let Processors.GetProcessorVersionResponse
+        { Processors.getProcessorVersionResponseSuccess = success,
+          Processors.getProcessorVersionResponseVersion = processorVersion
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printProcessorVersion processorVersion
+
+-- | Command to list processor versions
+listProcessorVersionsCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()
+listProcessorVersionsCmd token version processorId = do
+  response <- Processors.listProcessorVersions token version processorId
+  let Processors.ListProcessorVersionsResponse
+        { Processors.listProcessorVersionsResponseSuccess = success,
+          Processors.listProcessorVersionsResponseVersions = versions
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    putStrLn $ "Found " ++ show (length versions) ++ " processor versions:"
+    mapM_ printProcessorVersion versions
+
+-- | Command to publish a processor version
+publishProcessorVersionCmd :: ApiToken -> ApiVersion -> Text -> Processors.PublishProcessorVersionRequest -> Client.ClientM ()
+publishProcessorVersionCmd token version processorId request = do
+  response <- Processors.publishProcessorVersion token version processorId request
+  let Processors.PublishProcessorVersionResponse
+        { Processors.publishProcessorVersionResponseSuccess = success,
+          Processors.publishProcessorVersionResponseProcessorVersion = processorVersion
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printProcessorVersion processorVersion
+
+-- | Command to get a batch processor run
+getBatchProcessorRunCmd :: ApiToken -> ApiVersion -> Text -> Client.ClientM ()
+getBatchProcessorRunCmd token version batchRunId = do
+  response <- Processors.getBatchProcessorRun token version batchRunId
+  let Processors.GetBatchProcessorRunResponse
+        { Processors.getBatchProcessorRunResponseSuccess = success,
+          Processors.getBatchProcessorRunResponseBatchProcessorRun = batchProcessorRun
+        } = response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printBatchProcessorRun batchProcessorRun
+
+-- | Helper to print a processor
+printProcessor :: Processors.Processor -> IO ()
+printProcessor processor = do
+  putStrLn $ "  - ID: " ++ unpack (Processors.processorId processor)
+  putStrLn $ "    Name: " ++ unpack (Processors.processorName processor)
+  putStrLn $ "    Type: " ++ show (Processors.processorType processor)
+  putStrLn $ "    Created At: " ++ show (Processors.processorCreatedAt processor)
+  putStrLn $ "    Updated At: " ++ show (Processors.processorUpdatedAt processor)
+  case Processors.processorDraftVersion processor of
+    Just draftVersion -> do
+      putStrLn "    Draft Version:"
+      putStrLn $ "      ID: " ++ unpack (Processors.processorVersionId draftVersion)
+      putStrLn $ "      Version: " ++ unpack (Processors.processorVersionVersion draftVersion)
+    Nothing -> putStrLn "    No Draft Version"
+  putStrLn ""
+
+-- | Helper to print a processor version
+printProcessorVersion :: Processors.ProcessorVersion -> IO ()
+printProcessorVersion version = do
+  putStrLn $ "  - ID: " ++ unpack (Processors.processorVersionId version)
+  putStrLn $ "    Processor ID: " ++ unpack (Processors.processorVersionProcessorId version)
+  case Processors.processorVersionProcessorName version of
+    Just name -> putStrLn $ "    Processor Name: " ++ unpack name
+    Nothing -> pure ()
+  putStrLn $ "    Version: " ++ unpack (Processors.processorVersionVersion version)
+  putStrLn $ "    Type: " ++ show (Processors.processorVersionProcessorType version)
+  case Processors.processorVersionDescription version of
+    Just desc -> putStrLn $ "    Description: " ++ unpack desc
+    Nothing -> pure ()
+  putStrLn $ "    Created At: " ++ show (Processors.processorVersionCreatedAt version)
+  putStrLn $ "    Updated At: " ++ show (Processors.processorVersionUpdatedAt version)
+  putStrLn ""
+
+-- | Helper to print a processor run
+printProcessorRun :: Processors.ProcessorRun -> IO ()
+printProcessorRun processorRun = do
+  putStrLn $ "  - ID: " ++ unpack (Processors.processorRunId processorRun)
+  putStrLn $ "    Processor ID: " ++ unpack (Processors.processorRunProcessorId processorRun)
+  putStrLn $ "    Processor Name: " ++ unpack (Processors.processorRunProcessorName processorRun)
+  putStrLn $ "    Status: " ++ show (Processors.processorRunStatus processorRun)
+  case Processors.processorRunType processorRun of
+    Just type_ -> putStrLn $ "    Type: " ++ unpack type_
+    Nothing -> pure ()
+  case Processors.processorRunUrl processorRun of
+    Just url -> putStrLn $ "    URL: " ++ unpack url
+    Nothing -> pure ()
+  putStrLn $ "    Reviewed: " ++ show (Processors.processorRunReviewed processorRun)
+  putStrLn $ "    Edited: " ++ show (Processors.processorRunEdited processorRun)
+  putStrLn $ "    Files: " ++ show (length (Processors.processorRunFiles processorRun))
+  case Processors.processorRunFailureReason processorRun of
+    Just reason -> putStrLn $ "    Failure Reason: " ++ unpack reason
+    Nothing -> pure ()
+  case Processors.processorRunFailureMessage processorRun of
+    Just message -> putStrLn $ "    Failure Message: " ++ unpack message
+    Nothing -> pure ()
+  putStrLn ""
+
+-- | Helper to print a batch processor run
+printBatchProcessorRun :: Processors.BatchProcessorRun -> IO ()
+printBatchProcessorRun batchRun = do
+  putStrLn $ "  - ID: " ++ unpack (Processors.batchProcessorRunId batchRun)
+  putStrLn $ "    Processor ID: " ++ unpack (Processors.batchProcessorRunProcessorId batchRun)
+  putStrLn $ "    Processor Name: " ++ unpack (Processors.batchProcessorRunProcessorName batchRun)
+  putStrLn $ "    Status: " ++ unpack (Processors.batchProcessorRunStatus batchRun)
+  putStrLn $ "    Source: " ++ unpack (Processors.batchProcessorRunSource batchRun)
+  case Processors.batchProcessorRunSourceId batchRun of
+    Just sourceId -> putStrLn $ "    Source ID: " ++ unpack sourceId
+    Nothing -> pure ()
+  putStrLn $ "    Run Count: " ++ show (Processors.batchProcessorRunRunCount batchRun)
+  putStrLn $ "    Created At: " ++ show (Processors.batchProcessorRunCreatedAt batchRun)
+  putStrLn $ "    Updated At: " ++ show (Processors.batchProcessorRunUpdatedAt batchRun)
+  putStrLn ""
