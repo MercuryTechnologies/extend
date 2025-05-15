@@ -391,93 +391,253 @@ runProcessorExample = do
       version = defaultApiVersion
 
   -- Create a request to run a processor
-  let request = RunProcessorRequest
-        { fileIds = ["file_123456789"]
-        , config = Just (ProcessorConfig (object [
-              "language" .= ("english" :: Text),
-              "extractFields" .= True
-            ]))
+  let fileInput = Processors.ProcessorRunFileInput
+        { Processors.processorRunFileInputFileName = Just "test.pdf"
+        , Processors.processorRunFileInputFileUrl = Just "https://example.com/test.pdf"
+        , Processors.processorRunFileInputFileId = Nothing
+        }
+
+      request = Processors.RunProcessorRequest
+        { Processors.runProcessorRequestProcessorId = "dp_123456789"
+        , Processors.runProcessorRequestVersion = Just "1.0"
+        , Processors.runProcessorRequestFile = Just fileInput
+        , Processors.runProcessorRequestRawText = Nothing
+        , Processors.runProcessorRequestPriority = Just 10
+        , Processors.runProcessorRequestMetadata = Nothing
+        , Processors.runProcessorRequestConfig = Nothing
         }
 
   -- Run the processor
-  result <- runClientM (runProcessor token version "dp_123456789" request) env
+  result <- runClientM (runProcessor token version request) env
 
   case result of
     Left err -> throwIO err
     Right response -> do
       -- Process the processor run
-      let run = Processors.processorRun (data_ response)
-      putStrLn $ "Processor run ID: " ++ unpack (Processors.id run)
-      putStrLn $ "Status: " ++ show (Processors.status run)
-      putStrLn $ "Processor: " ++ unpack (Processors.processorName run)
-      putStrLn $ "Created at: " ++ show (Processors.createdAt run)
+      let run = Processors.runProcessorResponseProcessorRun response
+      putStrLn $ "Processor run ID: " ++ unpack (Processors.processorRunId run)
+      putStrLn $ "Status: " ++ show (Processors.processorRunStatus run)
+      putStrLn $ "Processor: " ++ unpack (Processors.processorRunProcessorName run)
 
       -- Access the output
-      putStrLn $ "Output: " ++ show (Processors.output run)
-
-      -- Process files
-      let files = Processors.files run
-      putStrLn $ "Number of files: " ++ show (length files)
-
-      -- Check for failures
-      case Processors.failureReason run of
-        Just reason -> putStrLn $ "Failure reason: " ++ unpack reason
-        Nothing -> pure ()
+      putStrLn $ "Output: " ++ show (Processors.processorRunOutput run)
 ```
 
-## Error Handling
+### Getting Processor Run Information
 
-The library provides structured error handling through the `ClientError` type from Servant:
+You can retrieve information about a specific processor run:
 
 ```haskell
-import Extend.V1
-import Control.Exception (catch, throwIO)
-import Servant.Client (runClientM, ClientError(..))
-import Data.Text (unpack)
-
-errorHandlingExample :: IO ()
-errorHandlingExample = do
-  -- Create client environment
+getProcessorRunExample :: IO ()
+getProcessorRunExample = do
   env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      processorRunId = "dpr_123456789"
 
-  -- Define API token and version
+  result <- runClientM (getProcessorRun token version processorRunId) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let run = Processors.getProcessorRunResponseProcessorRun response
+      putStrLn $ "Processor run ID: " ++ unpack (Processors.processorRunId run)
+      putStrLn $ "Status: " ++ show (Processors.processorRunStatus run)
+      putStrLn $ "Reviewed: " ++ show (Processors.processorRunReviewed run)
+      putStrLn $ "Edited: " ++ show (Processors.processorRunEdited run)
+```
+
+### Creating Processors
+
+You can create new document processors:
+
+```haskell
+createProcessorExample :: IO ()
+createProcessorExample = do
+  env <- getClientEnv "api.extend.ai"
   let token = ApiToken "your-api-key"
       version = defaultApiVersion
 
-  -- Create a request to run a workflow
-  let request = RunWorkflowRequest
-        { runWorkflowRequestWorkflowId = "wf_123456789"
-        , runWorkflowRequestFiles = Nothing
-        , runWorkflowRequestRawTexts = Nothing
-        , runWorkflowRequestPriority = Nothing
-        , runWorkflowRequestMetadata = Nothing
-        , runWorkflowRequestVersion = Nothing
+  let request = Processors.CreateProcessorRequest
+        { Processors.createProcessorRequestName = "Invoice Extractor"
+        , Processors.createProcessorRequestType = Processors.Extract
+        , Processors.createProcessorRequestCloneProcessorId = Nothing
+        , Processors.createProcessorRequestConfig = Nothing
         }
 
-  -- Run the workflow with error handling
-  result <- runClientM (runWorkflow token version request) env
+  result <- runClientM (createProcessor token version request) env
 
   case result of
-    Left err -> do
-      putStrLn "API call failed:"
-      case err of
-        FailureResponse _ response -> do
-          putStrLn $ "Status code: " ++ show (responseStatusCode response)
-          putStrLn $ "Response body: " ++ show (responseBody response)
-        ConnectionError e ->
-          putStrLn $ "Connection error: " ++ show e
-        _ ->
-          putStrLn $ "Other error: " ++ show err
-
+    Left err -> throwIO err
     Right response -> do
-      -- Process the workflow runs
-      let runs = runWorkflowResponseWorkflowRuns response
-      -- ...
+      let processor = Processors.createProcessorResponseProcessor response
+      putStrLn $ "Created processor: " ++ unpack (Processors.processorName processor)
+      putStrLn $ "ID: " ++ unpack (Processors.processorId processor)
+      putStrLn $ "Type: " ++ show (Processors.processorType processor)
 ```
 
-## Documentation
+### Updating Processors
 
-For more details about the Extend API, refer to the [official documentation](https://docs.extend.ai/developers).
+You can update existing document processors:
+
+```haskell
+updateProcessorExample :: IO ()
+updateProcessorExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      processorId = "dp_123456789"
+
+  let request = Processors.UpdateProcessorRequest
+        { Processors.updateProcessorRequestName = Just "Updated Invoice Extractor"
+        , Processors.updateProcessorRequestConfig = Nothing
+        }
+
+  result <- runClientM (updateProcessor token version processorId request) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let processor = Processors.updateProcessorResponseProcessor response
+      putStrLn $ "Updated processor: " ++ unpack (Processors.processorName processor)
+```
+
+### Working with Processor Versions
+
+You can manage processor versions:
+
+```haskell
+getProcessorVersionExample :: IO ()
+getProcessorVersionExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      processorId = "dp_123456789"
+      versionId = "dpv_123456789"
+
+  result <- runClientM (getProcessorVersion token version processorId versionId) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let processorVersion = Processors.getProcessorVersionResponseVersion response
+      putStrLn $ "Version ID: " ++ unpack (Processors.processorVersionId processorVersion)
+      putStrLn $ "Version: " ++ unpack (Processors.processorVersionVersion processorVersion)
+      putStrLn $ "Processor type: " ++ show (Processors.processorVersionProcessorType processorVersion)
+```
+
+### Listing Processor Versions
+
+You can list all versions of a processor:
+
+```haskell
+listProcessorVersionsExample :: IO ()
+listProcessorVersionsExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      processorId = "dp_123456789"
+
+  result <- runClientM (listProcessorVersions token version processorId) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let versions = Processors.listProcessorVersionsResponseVersions response
+      putStrLn $ "Found " ++ show (length versions) ++ " versions"
+
+      mapM_ (\v -> do
+          putStrLn $ "Version ID: " ++ unpack (Processors.processorVersionId v)
+          putStrLn $ "Version: " ++ unpack (Processors.processorVersionVersion v)
+          putStrLn $ "Created at: " ++ show (Processors.processorVersionCreatedAt v)
+          putStrLn ""
+        ) versions
+```
+
+### Publishing Processor Versions
+
+You can publish new versions of a processor:
+
+```haskell
+publishProcessorVersionExample :: IO ()
+publishProcessorVersionExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      processorId = "dp_123456789"
+
+  let request = Processors.PublishProcessorVersionRequest
+        { Processors.publishProcessorVersionRequestReleaseType = "minor"
+        , Processors.publishProcessorVersionRequestDescription = Just "Added new fields for extraction"
+        , Processors.publishProcessorVersionRequestConfig = Nothing
+        }
+
+  result <- runClientM (publishProcessorVersion token version processorId request) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let newVersion = Processors.publishProcessorVersionResponseProcessorVersion response
+      putStrLn $ "Published version: " ++ unpack (Processors.processorVersionVersion newVersion)
+      putStrLn $ "Version ID: " ++ unpack (Processors.processorVersionId newVersion)
+```
+
+### Batch Processor Runs
+
+You can retrieve information about batch processor runs:
+
+```haskell
+getBatchProcessorRunExample :: IO ()
+getBatchProcessorRunExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      batchRunId = "bpr_123456789"
+
+  result <- runClientM (getBatchProcessorRun token version batchRunId) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let batchRun = Processors.getBatchProcessorRunResponseBatchProcessorRun response
+      putStrLn $ "Batch run ID: " ++ unpack (Processors.batchProcessorRunId batchRun)
+      putStrLn $ "Processor ID: " ++ unpack (Processors.batchProcessorRunProcessorId batchRun)
+      putStrLn $ "Status: " ++ unpack (Processors.batchProcessorRunStatus batchRun)
+      putStrLn $ "Run count: " ++ show (Processors.batchProcessorRunRunCount batchRun)
+      putStrLn $ "Source: " ++ unpack (Processors.batchProcessorRunSource batchRun)
+
+      case Processors.batchProcessorRunSourceId batchRun of
+        Just sourceId -> putStrLn $ "Source ID: " ++ unpack sourceId
+        Nothing -> pure ()
+```
+
+## API Documentation
+
+For detailed information about the Extend API, refer to the official documentation:
+
+### Workflow API
+
+- [Run Workflow](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/run-workflow)
+- [Get Workflow Run](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/get-workflow-run)
+- [List Workflow Runs](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/list-workflow-runs)
+- [Batch Run Workflow](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/batch-run-workflow)
+- [Create Workflow](https://docs.extend.ai/2025-04-21/developers/api-reference/workflow-endpoints/create-workflow)
+
+### Processor API
+
+- [Run Processor](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/run-processor)
+- [Get Processor Run](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/get-processor-run)
+- [Create Processor](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/create-processor)
+- [Update Processor](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/update-processor)
+- [Get Processor Version](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/get-processor-version)
+- [List Processor Versions](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/list-processor-versions)
+- [Publish Processor Version](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/publish-processor-version)
+- [Get Batch Processor Run](https://docs.extend.ai/2025-04-21/developers/api-reference/processor-endpoints/get-batch-processor-run)
+
+### File API
+
+- [Upload File](https://docs.extend.ai/2025-04-21/developers/api-reference/file-endpoints/upload-file)
+- [Get File](https://docs.extend.ai/2025-04-21/developers/api-reference/file-endpoints/get-file)
 
 For LLM-focused documentation, check out [https://docs.extend.ai/llms.txt](https://docs.extend.ai/llms.txt) and [https://docs.extend.ai/llms-full.txt](https://docs.extend.ai/llms-full.txt).
 
