@@ -72,7 +72,7 @@ getWorkflowExample = do
   case result of
     Left err -> throwIO err
     Right response -> do
-      let workflow = data_ response
+      let workflow = successResponseData response
       putStrLn $ "Workflow name: " ++ unpack (workflowName workflow)
       putStrLn $ "Workflow version: " ++ unpack (workflowVersion workflow)
 ```
@@ -252,7 +252,7 @@ createWorkflowExample = do
   case result of
     Left err -> throwIO err
     Right response -> do
-      let workflow = createdWorkflowObjectWorkflow (data_ response)
+      let workflow = createdWorkflowObjectWorkflow (successResponseData response)
       putStrLn $ "Created workflow: " ++ unpack (workflowName workflow)
       putStrLn $ "ID: " ++ unpack (workflowId workflow)
 ```
@@ -307,12 +307,13 @@ listWorkflowRunsExample = do
 
 You can manage files in the Extend platform:
 
-```haskell
+````haskell
 import Extend.V1
 import qualified Extend.V1.Files as Files
 import Control.Exception (throwIO)
 import Servant.Client (runClientM)
 
+-- | Helper to print a file
 uploadFileExample :: IO ()
 uploadFileExample = do
   -- Create client environment
@@ -333,7 +334,7 @@ uploadFileExample = do
   case result of
     Left err -> throwIO err
     Right response -> do
-      let fileId = Files.id (Files.file (data_ response))
+      let fileId = Files.fileId (Files.createFileResponseFile (successResponseData response))
 
       -- Upload file content
       let fileContent = "file content as text" -- Or binary data encoded as Text
@@ -343,31 +344,100 @@ uploadFileExample = do
         Left err -> throwIO err
         Right uploadResponse -> do
           -- File uploaded successfully
-          putStrLn $ "File uploaded: " ++ show (success uploadResponse)
+          putStrLn $ "File uploaded: " ++ show (uploadFileResponseSuccess uploadResponse)
 
       -- Get file information
-      getFileResult <- runClientM (getFile token version fileId) env
+      getFileResult <- runClientM (getFile token version fileId Nothing Nothing Nothing) env
 
       case getFileResult of
         Left err -> throwIO err
         Right getFileResponse -> do
-          let file = Files.file (data_ getFileResponse)
-          putStrLn $ "File name: " ++ unpack (Files.name file)
-          putStrLn $ "File type: " ++ unpack (fromMaybe "" (Files.type_ file))
+          let file = Files.getFileResponseFile getFileResponse
+          putStrLn $ "File name: " ++ unpack (Files.fileName file)
+          putStrLn $ "File type: " ++ unpack (fromMaybe "" (Files.fileType file))
 
           -- Access file contents if available
-          case Files.contents file of
+          case Files.fileContents file of
             Just contents -> do
-              case Files.rawText contents of
+              case Files.fileContentsRawText contents of
                 Just text -> putStrLn $ "Raw text: " ++ unpack text
                 Nothing -> pure ()
 
               -- Access pages if available
-              case Files.pages contents of
+              case Files.fileContentsPages contents of
                 Just pages -> putStrLn $ "Number of pages: " ++ show (length pages)
                 Nothing -> pure ()
 
             Nothing -> pure ()
+
+### Getting File Content
+
+You can retrieve file information with various content options:
+
+```haskell
+getFileExample :: IO ()
+getFileExample = do
+  env <- getClientEnv "api.extend.ai"
+  let token = ApiToken "your-api-key"
+      version = defaultApiVersion
+      fileId = "file_AbC123XyZ"
+
+  -- Get file with raw text content
+  result <- runClientM (getFile token version fileId (Just True) Nothing Nothing) env
+
+  case result of
+    Left err -> throwIO err
+    Right response -> do
+      let file = Files.getFileResponseFile response
+      putStrLn $ "File ID: " ++ unpack (Files.fileId file)
+      putStrLn $ "File name: " ++ unpack (Files.fileName file)
+
+      -- Access raw text content
+      case Files.fileContents file of
+        Just contents -> do
+          case Files.fileContentsRawText contents of
+            Just text -> putStrLn $ "Raw text content: " ++ unpack text
+            Nothing -> putStrLn "No raw text content available"
+
+          -- Access pages if available
+          case Files.fileContentsPages contents of
+            Just pages -> do
+              putStrLn $ "File has " ++ show (length pages) ++ " pages"
+              -- Process individual pages
+              forM_ pages $ \page -> do
+                putStrLn $ "Page " ++ show (Files.pageNumber page)
+                case Files.pageRawText page of
+                  Just text -> putStrLn $ "  Content: " ++ unpack text
+                  Nothing -> putStrLn "  No text available for this page"
+            Nothing -> putStrLn "No page information available"
+        Nothing -> putStrLn "No file contents available"
+````
+
+When using the `getFile` function, you can specify which content to include:
+
+- `rawText`: Set to `Just True` to include raw text content
+- `markdown`: Set to `Just True` to include markdown content
+- `html`: Set to `Just True` to include HTML content
+
+### Using the CLI to Access Files
+
+The example CLI application provides a `get-file` command for retrieving files:
+
+```
+# Retrieve basic file information
+extend-example get-file file_AbC123XyZ
+
+# Include raw text content
+extend-example get-file file_AbC123XyZ --raw-text
+
+# Include markdown content
+extend-example get-file file_AbC123XyZ --markdown
+
+# Include HTML content
+extend-example get-file file_AbC123XyZ --html
+
+# Include all content types
+extend-example get-file file_AbC123XyZ --raw-text --markdown --html
 ```
 
 ### Running Processors
