@@ -1,73 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main (main) where
 
 import Data.Aeson (Result (Error, Success), ToJSON, Value, fromJSON, toJSON, (.=))
 import qualified Data.Aeson as Aeson (object)
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Data.Time.Calendar (Day (..))
 import Data.Time.Clock (UTCTime (..), secondsToDiffTime)
 import Extend.V1
+import qualified Extend.V1.Files as Files
 import qualified Extend.V1.Processors as P
 import qualified Extend.V1.Workflows as W
 import Test.Tasty
 import Test.Tasty.HUnit
-
-instance ToJSON P.RunProcessorResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.runProcessorResponseSuccess r,
-        "processorRun" .= P.runProcessorResponseProcessorRun r
-      ]
-
-instance ToJSON P.GetProcessorRunResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.getProcessorRunResponseSuccess r,
-        "processorRun" .= P.getProcessorRunResponseProcessorRun r
-      ]
-
-instance ToJSON P.CreateProcessorResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.createProcessorResponseSuccess r,
-        "processor" .= P.createProcessorResponseProcessor r
-      ]
-
-instance ToJSON P.UpdateProcessorResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.updateProcessorResponseSuccess r,
-        "processor" .= P.updateProcessorResponseProcessor r
-      ]
-
-instance ToJSON P.GetProcessorVersionResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.getProcessorVersionResponseSuccess r,
-        "version" .= P.getProcessorVersionResponseVersion r
-      ]
-
-instance ToJSON P.ListProcessorVersionsResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.listProcessorVersionsResponseSuccess r,
-        "versions" .= P.listProcessorVersionsResponseVersions r
-      ]
-
-instance ToJSON P.PublishProcessorVersionResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.publishProcessorVersionResponseSuccess r,
-        "processorVersion" .= P.publishProcessorVersionResponseProcessorVersion r
-      ]
-
-instance ToJSON P.GetBatchProcessorRunResponse where
-  toJSON r =
-    Aeson.object
-      [ "success" .= P.getBatchProcessorRunResponseSuccess r,
-        "batchProcessorRun" .= P.getBatchProcessorRunResponseBatchProcessorRun r
-      ]
 
 main :: IO ()
 main = defaultMain tests
@@ -1089,6 +1036,144 @@ tests =
                   P.GetBatchProcessorRunResponse
                     { P.getBatchProcessorRunResponseSuccess = True,
                       P.getBatchProcessorRunResponseBatchProcessorRun = batchProcessorRun
+                    }
+                json = toJSON response
+             in case fromJSON json of
+                  Success r -> r @?= response
+                  Error err -> assertFailure $ "Round trip failed: " ++ err
+        ],
+      testGroup
+        "GetFileResponse"
+        [ testCase "Basic response deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "file"
+                        .= Aeson.object
+                          [ "object" .= ("file" :: Text),
+                            "id" .= ("file_test123" :: Text),
+                            "name" .= ("test.pdf" :: Text),
+                            "type" .= ("PDF" :: Text),
+                            "metadata" .= Aeson.object ["pageCount" .= (5 :: Int)],
+                            "presignedUrl" .= ("https://example.com/file.pdf" :: Text),
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text)
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    Files.getFileResponseSuccess r @?= True
+                    let file = Files.getFileResponseFile r
+                    Files.fileId file @?= "file_test123"
+                    Files.fileName file @?= "test.pdf"
+                    Files.fileType file @?= Just "PDF"
+                    Files.filePresignedUrl file @?= Just "https://example.com/file.pdf"
+                    case Files.fileMetadataPageCount (Files.fileMetadata file) of
+                      Just pageCount -> pageCount @?= 5
+                      Nothing -> assertFailure "Expected page count to be 5"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response with contents deserialization" $
+            let json =
+                  Aeson.object
+                    [ "success" .= True,
+                      "file"
+                        .= Aeson.object
+                          [ "object" .= ("file" :: Text),
+                            "id" .= ("file_test123" :: Text),
+                            "name" .= ("test.pdf" :: Text),
+                            "type" .= ("PDF" :: Text),
+                            "metadata" .= Aeson.object ["pageCount" .= (2 :: Int)],
+                            "presignedUrl" .= ("https://example.com/file.pdf" :: Text),
+                            "createdAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "updatedAt" .= ("2025-04-28T17:01:39.285Z" :: Text),
+                            "contents"
+                              .= Aeson.object
+                                [ "rawText" .= ("Sample raw text content" :: Text),
+                                  "pages"
+                                    .= [ Aeson.object
+                                           [ "pageNumber" .= (1 :: Int),
+                                             "pageHeight" .= (11.0 :: Double),
+                                             "pageWidth" .= (8.5 :: Double),
+                                             "rawText" .= ("Page 1 content" :: Text)
+                                           ],
+                                         Aeson.object
+                                           [ "pageNumber" .= (2 :: Int),
+                                             "pageHeight" .= (11.0 :: Double),
+                                             "pageWidth" .= (8.5 :: Double),
+                                             "rawText" .= ("Page 2 content" :: Text)
+                                           ]
+                                       ]
+                                ]
+                          ]
+                    ]
+             in case fromJSON json of
+                  Success r -> do
+                    Files.getFileResponseSuccess r @?= True
+                    let file = Files.getFileResponseFile r
+                    Files.fileId file @?= "file_test123"
+                    Files.fileName file @?= "test.pdf"
+                    case Files.fileContents file of
+                      Just contents -> do
+                        Files.fileContentsRawText contents @?= Just "Sample raw text content"
+                        case Files.fileContentsPages contents of
+                          Just pages -> do
+                            length pages @?= 2
+                            Files.pageNumber (head pages) @?= 1
+                            Files.pageHeight (head pages) @?= Just 11.0
+                            Files.pageWidth (head pages) @?= Just 8.5
+                            Files.pageRawText (head pages) @?= Just "Page 1 content"
+                          Nothing -> assertFailure "Expected pages to be present"
+                      Nothing -> assertFailure "Expected contents to be present"
+                  Error err -> assertFailure $ "Failed to parse: " ++ err,
+          testCase "Response serialization/deserialization round trip" $
+            let testTime = UTCTime (ModifiedJulianDay 59000) (secondsToDiffTime 0)
+                page1 =
+                  Files.Page
+                    { Files.pageNumber = 1,
+                      Files.pageHeight = Just 11.0,
+                      Files.pageWidth = Just 8.5,
+                      Files.pageRawText = Just "Page 1 content",
+                      Files.pageMarkdown = Nothing,
+                      Files.pageHtml = Nothing
+                    }
+                page2 =
+                  Files.Page
+                    { Files.pageNumber = 2,
+                      Files.pageHeight = Just 11.0,
+                      Files.pageWidth = Just 8.5,
+                      Files.pageRawText = Just "Page 2 content",
+                      Files.pageMarkdown = Nothing,
+                      Files.pageHtml = Nothing
+                    }
+                contents =
+                  Files.FileContents
+                    { Files.fileContentsRawText = Just "Sample raw text content",
+                      Files.fileContentsMarkdown = Nothing,
+                      Files.fileContentsPages = Just [page1, page2],
+                      Files.fileContentsSheets = Nothing
+                    }
+                metadata =
+                  Files.FileMetadata
+                    { Files.fileMetadataPageCount = Just 2,
+                      Files.fileMetadataParentSplit = Nothing
+                    }
+                file =
+                  Files.File
+                    { Files.fileObject = FileObject,
+                      Files.fileId = "file_test123",
+                      Files.fileName = "test.pdf",
+                      Files.fileMetadata = metadata,
+                      Files.fileCreatedAt = testTime,
+                      Files.fileUpdatedAt = testTime,
+                      Files.fileType = Just "PDF",
+                      Files.filePresignedUrl = Just "https://example.com/file.pdf",
+                      Files.fileParentFileId = Nothing,
+                      Files.fileContents = Just contents
+                    }
+                response =
+                  Files.GetFileResponse
+                    { Files.getFileResponseSuccess = True,
+                      Files.getFileResponseFile = file
                     }
                 json = toJSON response
              in case fromJSON json of

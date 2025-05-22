@@ -32,15 +32,15 @@ import Extend.V1.Common
 -- | Parent split information for a file
 data ParentSplit = ParentSplit
   { -- | ID of the split
-    id :: Text,
+    parentSplitId :: Text,
     -- | Type of the split
-    type_ :: Text,
+    parentSplitType :: Text,
     -- | Identifier for the split
-    identifier :: Text,
+    parentSplitIdentifier :: Text,
     -- | Starting page of the split
-    startPage :: Int,
+    parentSplitStartPage :: Int,
     -- | Ending page of the split
-    endPage :: Int
+    parentSplitEndPage :: Int
   }
   deriving stock (Show, Eq, Generic)
 
@@ -51,24 +51,31 @@ instance FromJSON ParentSplit where
     identifier <- v .: "identifier"
     startPage <- v .: "startPage"
     endPage <- v .: "endPage"
-    pure ParentSplit {..}
+    pure
+      ParentSplit
+        { parentSplitId = id,
+          parentSplitType = type_,
+          parentSplitIdentifier = identifier,
+          parentSplitStartPage = startPage,
+          parentSplitEndPage = endPage
+        }
 
 instance ToJSON ParentSplit where
   toJSON ParentSplit {..} =
     Aeson.object
-      [ "id" .= id,
-        "type" .= type_,
-        "identifier" .= identifier,
-        "startPage" .= startPage,
-        "endPage" .= endPage
+      [ "id" .= parentSplitId,
+        "type" .= parentSplitType,
+        "identifier" .= parentSplitIdentifier,
+        "startPage" .= parentSplitStartPage,
+        "endPage" .= parentSplitEndPage
       ]
 
 -- | Metadata for a file
 data FileMetadata = FileMetadata
   { -- | Number of pages in the file
-    pageCount :: Maybe Int,
+    fileMetadataPageCount :: Maybe Int,
     -- | Parent split information if this file is a split
-    parentSplit :: Maybe ParentSplit
+    fileMetadataParentSplit :: Maybe ParentSplit
   }
   deriving stock (Show, Eq, Generic)
 
@@ -76,14 +83,18 @@ instance FromJSON FileMetadata where
   parseJSON = withObject "FileMetadata" $ \v -> do
     pageCount <- v .:? "pageCount"
     parentSplit <- v .:? "parentSplit"
-    pure FileMetadata {..}
+    pure
+      FileMetadata
+        { fileMetadataPageCount = pageCount,
+          fileMetadataParentSplit = parentSplit
+        }
 
 instance ToJSON FileMetadata where
   toJSON FileMetadata {..} =
     Aeson.object $
       catMaybes
-        [ ("pageCount" .=) <$> pageCount,
-          ("parentSplit" .=) <$> parentSplit
+        [ ("pageCount" .=) <$> fileMetadataPageCount,
+          ("parentSplit" .=) <$> fileMetadataParentSplit
         ]
 
 -- | Page in a file
@@ -91,15 +102,15 @@ data Page = Page
   { -- | The page number
     pageNumber :: Int,
     -- | Height of the page
-    pageHeight :: Maybe Int,
+    pageHeight :: Maybe Double,
     -- | Width of the page
-    pageWidth :: Maybe Int,
+    pageWidth :: Maybe Double,
     -- | Raw text content of the page
-    rawText :: Maybe Text,
+    pageRawText :: Maybe Text,
     -- | Markdown content of the page
-    markdown :: Maybe Text,
+    pageMarkdown :: Maybe Text,
     -- | HTML content of the page
-    html :: Maybe Text
+    pageHtml :: Maybe Text
   }
   deriving stock (Show, Eq, Generic)
 
@@ -111,7 +122,15 @@ instance FromJSON Page where
     rawText <- v .:? "rawText"
     markdown <- v .:? "markdown"
     html <- v .:? "html"
-    pure Page {..}
+    pure
+      Page
+        { pageNumber = pageNumber,
+          pageHeight = pageHeight,
+          pageWidth = pageWidth,
+          pageRawText = rawText,
+          pageMarkdown = markdown,
+          pageHtml = html
+        }
 
 instance ToJSON Page where
   toJSON Page {..} =
@@ -120,9 +139,9 @@ instance ToJSON Page where
         [ Just ("pageNumber" .= pageNumber),
           ("pageHeight" .=) <$> pageHeight,
           ("pageWidth" .=) <$> pageWidth,
-          ("rawText" .=) <$> rawText,
-          ("markdown" .=) <$> markdown,
-          ("html" .=) <$> html
+          ("rawText" .=) <$> pageRawText,
+          ("markdown" .=) <$> pageMarkdown,
+          ("html" .=) <$> pageHtml
         ]
 
 -- | Sheet in a file
@@ -130,7 +149,7 @@ data Sheet = Sheet
   { -- | Name of the sheet
     sheetName :: Text,
     -- | Raw text content of the sheet
-    rawText :: Maybe Text
+    sheetRawText :: Maybe Text
   }
   deriving stock (Show, Eq, Generic)
 
@@ -138,26 +157,30 @@ instance FromJSON Sheet where
   parseJSON = withObject "Sheet" $ \v -> do
     sheetName <- v .: "sheetName"
     rawText <- v .:? "rawText"
-    pure Sheet {..}
+    pure
+      Sheet
+        { sheetName = sheetName,
+          sheetRawText = rawText
+        }
 
 instance ToJSON Sheet where
   toJSON Sheet {..} =
     Aeson.object $
       catMaybes
         [ Just ("sheetName" .= sheetName),
-          ("rawText" .=) <$> rawText
+          ("rawText" .=) <$> sheetRawText
         ]
 
 -- | Contents of a file
 data FileContents = FileContents
   { -- | Raw text content of the file
-    rawText :: Maybe Text,
+    fileContentsRawText :: Maybe Text,
     -- | Markdown content of the file
-    markdown :: Maybe Text,
+    fileContentsMarkdown :: Maybe Text,
     -- | Pages in the file
-    pages :: Maybe [Page],
+    fileContentsPages :: Maybe [Page],
     -- | Sheets in the file
-    sheets :: Maybe [Sheet]
+    fileContentsSheets :: Maybe [Sheet]
   }
   deriving stock (Show, Eq, Generic)
 
@@ -167,40 +190,46 @@ instance FromJSON FileContents where
     markdown <- v .:? "markdown"
     pages <- v .:? "pages"
     sheets <- v .:? "sheets"
-    pure FileContents {..}
+    pure
+      FileContents
+        { fileContentsRawText = rawText,
+          fileContentsMarkdown = markdown,
+          fileContentsPages = pages,
+          fileContentsSheets = sheets
+        }
 
 instance ToJSON FileContents where
   toJSON FileContents {..} =
     Aeson.object $
       catMaybes
-        [ ("rawText" .=) <$> rawText,
-          ("markdown" .=) <$> markdown,
-          ("pages" .=) <$> pages,
-          ("sheets" .=) <$> sheets
+        [ ("rawText" .=) <$> fileContentsRawText,
+          ("markdown" .=) <$> fileContentsMarkdown,
+          ("pages" .=) <$> fileContentsPages,
+          ("sheets" .=) <$> fileContentsSheets
         ]
 
 -- | A file in the Extend API
 data File = File
   { -- | Type of the object
-    object :: ObjectType,
+    fileObject :: ObjectType,
     -- | ID of the file
-    id :: Text,
+    fileId :: Text,
     -- | Name of the file
-    name :: Text,
+    fileName :: Text,
     -- | Metadata for the file
-    metadata :: FileMetadata,
+    fileMetadata :: FileMetadata,
     -- | When the file was created
-    createdAt :: UTCTime,
+    fileCreatedAt :: UTCTime,
     -- | When the file was last updated
-    updatedAt :: UTCTime,
+    fileUpdatedAt :: UTCTime,
     -- | Type of the file (PDF, CSV, etc.)
-    type_ :: Maybe Text,
+    fileType :: Maybe Text,
     -- | URL to download the file
-    presignedUrl :: Maybe Text,
+    filePresignedUrl :: Maybe Text,
     -- | ID of the parent file if this is a derivative
-    parentFileId :: Maybe Text,
+    fileParentFileId :: Maybe Text,
     -- | Contents of the file
-    contents :: Maybe FileContents
+    fileContents :: Maybe FileContents
   }
   deriving stock (Show, Eq, Generic)
 
@@ -218,32 +247,32 @@ instance FromJSON File where
     contents <- v .:? "contents"
     pure
       File
-        { object = objectType,
-          id = id,
-          name = name,
-          metadata = metadata,
-          createdAt = createdAt,
-          updatedAt = updatedAt,
-          type_ = type_,
-          presignedUrl = presignedUrl,
-          parentFileId = parentFileId,
-          contents = contents
+        { fileObject = objectType,
+          fileId = id,
+          fileName = name,
+          fileMetadata = metadata,
+          fileCreatedAt = createdAt,
+          fileUpdatedAt = updatedAt,
+          fileType = type_,
+          filePresignedUrl = presignedUrl,
+          fileParentFileId = parentFileId,
+          fileContents = contents
         }
 
 instance ToJSON File where
   toJSON File {..} =
     Aeson.object $
       catMaybes
-        [ Just ("object" .= object),
-          Just ("id" .= id),
-          Just ("name" .= name),
-          Just ("metadata" .= metadata),
-          Just ("createdAt" .= createdAt),
-          Just ("updatedAt" .= updatedAt),
-          ("type" .=) <$> type_,
-          ("presignedUrl" .=) <$> presignedUrl,
-          ("parentFileId" .=) <$> parentFileId,
-          ("contents" .=) <$> contents
+        [ Just ("object" .= fileObject),
+          Just ("id" .= fileId),
+          Just ("name" .= fileName),
+          Just ("metadata" .= fileMetadata),
+          Just ("createdAt" .= fileCreatedAt),
+          Just ("updatedAt" .= fileUpdatedAt),
+          ("type" .=) <$> fileType,
+          ("presignedUrl" .=) <$> filePresignedUrl,
+          ("parentFileId" .=) <$> fileParentFileId,
+          ("contents" .=) <$> fileContents
         ]
 
 -- | Request to create a file
@@ -266,34 +295,44 @@ instance ToJSON CreateFileRequest where
 -- | Response from creating a file
 newtype CreateFileResponse = CreateFileResponse
   { -- | The created file
-    file :: File
+    createFileResponseFile :: File
   }
   deriving stock (Show, Eq, Generic)
 
 instance FromJSON CreateFileResponse where
   parseJSON = withObject "CreateFileResponse" $ \v -> do
     file <- v .: "file"
-    pure CreateFileResponse {..}
+    pure CreateFileResponse {createFileResponseFile = file}
 
 -- | Response from uploading a file
 newtype UploadFileResponse = UploadFileResponse
   { -- | Whether the upload was successful
-    success :: Bool
+    uploadFileResponseSuccess :: Bool
   }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
 -- | Response from getting a file
-newtype GetFileResponse = GetFileResponse
-  { -- | The requested file
-    file :: File
+data GetFileResponse = GetFileResponse
+  { -- | Whether the request was successful
+    getFileResponseSuccess :: Bool,
+    -- | The requested file
+    getFileResponseFile :: File
   }
   deriving stock (Show, Eq, Generic)
 
 instance FromJSON GetFileResponse where
   parseJSON = withObject "GetFileResponse" $ \v -> do
+    success <- v .: "success"
     file <- v .: "file"
-    pure GetFileResponse {..}
+    pure GetFileResponse {getFileResponseSuccess = success, getFileResponseFile = file}
+
+instance ToJSON GetFileResponse where
+  toJSON GetFileResponse {..} =
+    Aeson.object
+      [ "success" .= getFileResponseSuccess,
+        "file" .= getFileResponseFile
+      ]
 
 -- | Response from listing files
 data ListFilesResponse = ListFilesResponse
@@ -336,7 +375,10 @@ type FilesAPI =
     :> Capture "fileId" Text
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
-    :> Get '[JSON] (SuccessResponse GetFileResponse)
+    :> QueryParam "rawText" Bool
+    :> QueryParam "markdown" Bool
+    :> QueryParam "html" Bool
+    :> Get '[JSON] GetFileResponse
     :<|> "files"
     :> Header' '[Required, Strict] "Authorization" Text
     :> Header' '[Required, Strict] "x-extend-api-version" Text
@@ -356,7 +398,7 @@ filesAPI = Proxy
 
 createFileClient :: Text -> Text -> CreateFileRequest -> ClientM (SuccessResponse CreateFileResponse)
 uploadFileClient :: Text -> Text -> Text -> Text -> ClientM UploadFileResponse
-getFileClient :: Text -> Text -> Text -> ClientM (SuccessResponse GetFileResponse)
+getFileClient :: Text -> Text -> Text -> Maybe Bool -> Maybe Bool -> Maybe Bool -> ClientM GetFileResponse
 listFilesClient :: Text -> Text -> Maybe Int -> Maybe Int -> ClientM (SuccessResponse ListFilesResponse)
 deleteFileClient :: Text -> Text -> Text -> () -> ClientM DeleteFileResponse
 createFileClient :<|> uploadFileClient :<|> getFileClient :<|> listFilesClient :<|> deleteFileClient = client filesAPI
@@ -388,9 +430,15 @@ getFile ::
   ApiVersion ->
   -- | File ID
   Text ->
-  ClientM (SuccessResponse GetFileResponse)
-getFile (ApiToken token) (ApiVersion version) fileId =
-  getFileClient fileId ("Bearer " <> token) version
+  -- | Include raw text content
+  Maybe Bool ->
+  -- | Include markdown content
+  Maybe Bool ->
+  -- | Include HTML content
+  Maybe Bool ->
+  ClientM GetFileResponse
+getFile (ApiToken token) (ApiVersion version) fileId rawText markdown html =
+  getFileClient fileId ("Bearer " <> token) version rawText markdown html
 
 -- | List files
 listFiles ::

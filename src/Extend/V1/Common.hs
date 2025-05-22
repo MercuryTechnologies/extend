@@ -59,9 +59,9 @@ instance ToJSON ObjectType where
 -- | Generic success response
 data SuccessResponse a = SuccessResponse
   { -- | Whether the request was successful
-    success :: Bool,
+    successResponseSuccess :: Bool,
     -- | The response data
-    data_ :: a
+    successResponseData :: a
   }
   deriving stock (Show, Eq, Generic)
 
@@ -69,13 +69,17 @@ instance (FromJSON a) => FromJSON (SuccessResponse a) where
   parseJSON = Aeson.withObject "SuccessResponse" $ \v -> do
     success <- v Aeson..: "success"
     data_ <- v Aeson..: "data"
-    pure SuccessResponse {..}
+    pure
+      SuccessResponse
+        { successResponseSuccess = success,
+          successResponseData = data_
+        }
 
 instance (ToJSON a) => ToJSON (SuccessResponse a) where
   toJSON SuccessResponse {..} =
     Aeson.object
-      [ "success" .= success,
-        "data" .= data_
+      [ "success" .= successResponseSuccess,
+        "data" .= successResponseData
       ]
 
 -- | Pagination information
@@ -93,11 +97,11 @@ data Pagination = Pagination
 -- | Paginated response
 data PaginatedResponse a = PaginatedResponse
   { -- | Whether the request was successful
-    success :: Bool,
+    paginatedResponseSuccess :: Bool,
     -- | The response data
-    data_ :: [a],
+    paginatedResponseData :: [a],
     -- | Pagination information
-    pagination :: Pagination
+    paginatedResponsePagination :: Pagination
   }
   deriving stock (Show, Eq, Generic)
 
@@ -106,12 +110,17 @@ instance (FromJSON a) => FromJSON (PaginatedResponse a) where
     success <- v Aeson..: "success"
     data_ <- v Aeson..: "data"
     pagination <- v Aeson..: "pagination"
-    pure PaginatedResponse {..}
+    pure
+      PaginatedResponse
+        { paginatedResponseSuccess = success,
+          paginatedResponseData = data_,
+          paginatedResponsePagination = pagination
+        }
 
 instance (ToJSON a) => ToJSON (PaginatedResponse a) where
   toJSON PaginatedResponse {..} =
     Aeson.object
-      [ "success" .= success,
-        "data" .= data_,
-        "pagination" .= pagination
+      [ "success" .= paginatedResponseSuccess,
+        "data" .= paginatedResponseData,
+        "pagination" .= paginatedResponsePagination
       ]

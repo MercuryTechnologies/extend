@@ -489,6 +489,13 @@ instance FromJSON RunProcessorResponse where
           runProcessorResponseProcessorRun = processorRun
         }
 
+instance ToJSON RunProcessorResponse where
+  toJSON RunProcessorResponse {..} =
+    Aeson.object
+      [ "success" .= runProcessorResponseSuccess,
+        "processorRun" .= runProcessorResponseProcessorRun
+      ]
+
 -- | Response from getting a processor run
 data GetProcessorRunResponse = GetProcessorRunResponse
   { -- | Whether the request was successful
@@ -507,6 +514,13 @@ instance FromJSON GetProcessorRunResponse where
         { getProcessorRunResponseSuccess = success,
           getProcessorRunResponseProcessorRun = processorRun
         }
+
+instance ToJSON GetProcessorRunResponse where
+  toJSON GetProcessorRunResponse {..} =
+    Aeson.object
+      [ "success" .= getProcessorRunResponseSuccess,
+        "processorRun" .= getProcessorRunResponseProcessorRun
+      ]
 
 -- | A batch processor run
 data BatchProcessorRun = BatchProcessorRun
@@ -609,6 +623,13 @@ instance FromJSON GetBatchProcessorRunResponse where
           getBatchProcessorRunResponseBatchProcessorRun = batchProcessorRun
         }
 
+instance ToJSON GetBatchProcessorRunResponse where
+  toJSON GetBatchProcessorRunResponse {..} =
+    Aeson.object
+      [ "success" .= getBatchProcessorRunResponseSuccess,
+        "batchProcessorRun" .= getBatchProcessorRunResponseBatchProcessorRun
+      ]
+
 -- | Request to create a processor
 data CreateProcessorRequest = CreateProcessorRequest
   { -- | The name of the processor
@@ -665,6 +686,13 @@ instance FromJSON CreateProcessorResponse where
           createProcessorResponseProcessor = processor
         }
 
+instance ToJSON CreateProcessorResponse where
+  toJSON CreateProcessorResponse {..} =
+    Aeson.object
+      [ "success" .= createProcessorResponseSuccess,
+        "processor" .= createProcessorResponseProcessor
+      ]
+
 -- | Request to update a processor
 data UpdateProcessorRequest = UpdateProcessorRequest
   { -- | The name of the processor
@@ -711,6 +739,13 @@ instance FromJSON UpdateProcessorResponse where
           updateProcessorResponseProcessor = processor
         }
 
+instance ToJSON UpdateProcessorResponse where
+  toJSON UpdateProcessorResponse {..} =
+    Aeson.object
+      [ "success" .= updateProcessorResponseSuccess,
+        "processor" .= updateProcessorResponseProcessor
+      ]
+
 -- | Response from getting a processor version
 data GetProcessorVersionResponse = GetProcessorVersionResponse
   { -- | Whether the request was successful
@@ -730,6 +765,13 @@ instance FromJSON GetProcessorVersionResponse where
           getProcessorVersionResponseVersion = version
         }
 
+instance ToJSON GetProcessorVersionResponse where
+  toJSON GetProcessorVersionResponse {..} =
+    Aeson.object
+      [ "success" .= getProcessorVersionResponseSuccess,
+        "version" .= getProcessorVersionResponseVersion
+      ]
+
 -- | Response from listing processor versions
 data ListProcessorVersionsResponse = ListProcessorVersionsResponse
   { -- | Whether the request was successful
@@ -748,6 +790,13 @@ instance FromJSON ListProcessorVersionsResponse where
         { listProcessorVersionsResponseSuccess = success,
           listProcessorVersionsResponseVersions = versions
         }
+
+instance ToJSON ListProcessorVersionsResponse where
+  toJSON ListProcessorVersionsResponse {..} =
+    Aeson.object
+      [ "success" .= listProcessorVersionsResponseSuccess,
+        "versions" .= listProcessorVersionsResponseVersions
+      ]
 
 -- | Request to publish a processor version
 data PublishProcessorVersionRequest = PublishProcessorVersionRequest
@@ -799,6 +848,13 @@ instance FromJSON PublishProcessorVersionResponse where
         { publishProcessorVersionResponseSuccess = success,
           publishProcessorVersionResponseProcessorVersion = processorVersion
         }
+
+instance ToJSON PublishProcessorVersionResponse where
+  toJSON PublishProcessorVersionResponse {..} =
+    Aeson.object
+      [ "success" .= publishProcessorVersionResponseSuccess,
+        "processorVersion" .= publishProcessorVersionResponseProcessorVersion
+      ]
 
 -- | Processors API endpoints
 type ProcessorsAPI =

@@ -6,9 +6,11 @@ module Main (main) where
 
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text, pack, unpack)
 import Extend.V1
+import qualified Extend.V1.Common as Common
+import qualified Extend.V1.Files as Files
 import qualified Extend.V1.Processors as Processors
 import qualified Extend.V1.Workflows as Workflows
 import qualified Network.HTTP.Client as HTTP
@@ -35,6 +37,7 @@ data Command
   | ListProcessorVersions Text -- processor ID
   | PublishProcessorVersion Text Text (Maybe Text) -- processor ID, release type (major/minor), optional description
   | GetBatchProcessorRun Text -- batch processor run ID
+  | GetFile Text (Maybe Bool) (Maybe Bool) (Maybe Bool) -- file ID, optional rawText flag, optional markdown flag, optional html flag
   deriving (Show)
 
 -- | Parse CLI arguments
@@ -81,7 +84,7 @@ commandParser =
               (progDesc "List workflow runs with various filtering options")
           ),
         command
-          "get-run"
+          "get-workflow-run"
           ( info
               (GetWorkflowRun <$> workflowRunIdArg)
               (progDesc "Get a specific workflow run by ID")
@@ -157,6 +160,17 @@ commandParser =
           ( info
               (GetBatchProcessorRun <$> batchProcessorRunIdArg)
               (progDesc "Get details about a batch processor run")
+          ),
+        command
+          "get-file"
+          ( info
+              ( GetFile
+                  <$> fileIdArg
+                  <*> optional rawTextOpt
+                  <*> optional markdownOpt
+                  <*> optional htmlOpt
+              )
+              (progDesc "Get a file by ID with optional rawText, markdown, and html parameters")
           )
       ]
 
@@ -211,6 +225,27 @@ workflowNameArg :: Parser Text
 workflowNameArg =
   strArgument
     (metavar "NAME" <> help "Name for the new workflow")
+
+-- | File options
+fileIdArg :: Parser Text
+fileIdArg =
+  strArgument
+    (metavar "FILE_ID" <> help "File ID to retrieve")
+
+rawTextOpt :: Parser Bool
+rawTextOpt =
+  switch
+    (long "raw-text" <> help "Include raw text content in the response")
+
+markdownOpt :: Parser Bool
+markdownOpt =
+  switch
+    (long "markdown" <> help "Include markdown content in the response")
+
+htmlOpt :: Parser Bool
+htmlOpt =
+  switch
+    (long "html" <> help "Include HTML content in the response")
 
 -- | Additional arguments for processor commands
 processorIdArg :: Parser Text
@@ -496,6 +531,19 @@ runCommand token version env = \case
   GetBatchProcessorRun batchRunId -> do
     putStrLn $ "Getting batch processor run: " ++ unpack batchRunId
     Client.runClientM (getBatchProcessorRunCmd token version batchRunId) env
+  GetFile fileId rawText markdown html -> do
+    putStrLn $ "Getting file: " ++ unpack fileId
+    when (isJust rawText) $
+      putStrLn $
+        "RawText: " ++ show (fromMaybe False rawText)
+    when (isJust markdown) $
+      putStrLn $
+        "Markdown: " ++ show (fromMaybe False markdown)
+    when (isJust html) $
+      putStrLn $
+        "HTML: " ++ show (fromMaybe False html)
+
+    Client.runClientM (getFileCmd token version fileId rawText markdown html) env
 
 -- | Command to run a workflow
 runWorkflowCmd :: ApiToken -> ApiVersion -> Workflows.RunWorkflowRequest -> Client.ClientM ()
@@ -568,6 +616,13 @@ printWorkflowRun workflowRun = do
   -- Display the batch ID if available
   case Workflows.workflowRunBatchId workflowRun of
     Just batchId -> putStrLn $ "    Batch ID: " ++ unpack batchId
+    Nothing -> pure ()
+
+  -- Display the file ID if available
+  case Workflows.workflowRunFiles workflowRun of
+    Just files -> do
+      putStrLn $ "    Files: " ++ show (length files)
+      mapM_ (putStrLn . ("    - ID: " ++)) (map unpack (map Files.fileId files))
     Nothing -> pure ()
 
   -- Display timestamps if available
@@ -840,3 +895,80 @@ printBatchProcessorRun batchRun = do
   putStrLn $ "    Created At: " ++ show (Processors.batchProcessorRunCreatedAt batchRun)
   putStrLn $ "    Updated At: " ++ show (Processors.batchProcessorRunUpdatedAt batchRun)
   putStrLn ""
+
+-- | Helper to print a file
+printFile :: Files.File -> IO ()
+printFile file = do
+  putStrLn $ "  - ID: " ++ unpack (Files.fileId file)
+  putStrLn $ "    Name: " ++ unpack (Files.fileName file)
+
+  case Files.fileType file of
+    Just t -> putStrLn $ "    Type: " ++ unpack t
+    Nothing -> putStrLn $ "    Type: (unknown)"
+
+  putStrLn $ "    Created At: " ++ show (Files.fileCreatedAt file)
+  putStrLn $ "    Updated At: " ++ show (Files.fileUpdatedAt file)
+
+  case Files.filePresignedUrl file of
+    Just url -> putStrLn $ "    Presigned URL: " ++ unpack url
+    Nothing -> pure ()
+
+  case Files.fileParentFileId file of
+    Just pid -> putStrLn $ "    Parent File ID: " ++ unpack pid
+    Nothing -> pure ()
+
+  -- Print metadata
+  let meta = Files.fileMetadata file
+  putStrLn $ "    Metadata:"
+
+  case Files.fileMetadataPageCount meta of
+    Just pc -> putStrLn $ "      Page Count: " ++ show pc
+    Nothing -> pure ()
+
+  case Files.fileMetadataParentSplit meta of
+    Just ps -> do
+      putStrLn $ "      Parent Split:"
+      putStrLn $ "        ID: " ++ unpack (Files.parentSplitId ps)
+      putStrLn $ "        Type: " ++ unpack (Files.parentSplitType ps)
+      putStrLn $ "        Identifier: " ++ unpack (Files.parentSplitIdentifier ps)
+      putStrLn $ "        Start Page: " ++ show (Files.parentSplitStartPage ps)
+      putStrLn $ "        End Page: " ++ show (Files.parentSplitEndPage ps)
+    Nothing -> pure ()
+
+  -- Print contents if available
+  case Files.fileContents file of
+    Just cont -> do
+      putStrLn $ "    Contents:"
+
+      case Files.fileContentsRawText cont of
+        Just _ -> putStrLn $ "      Raw Text: (available)"
+        Nothing -> pure ()
+
+      case Files.fileContentsMarkdown cont of
+        Just _ -> putStrLn $ "      Markdown: (available)"
+        Nothing -> pure ()
+
+      case Files.fileContentsPages cont of
+        Just pgs -> do
+          putStrLn $ "      Pages: " ++ show (length pgs)
+          putStrLn $ "        (Use --raw-text, --markdown, or --html to view content)"
+        Nothing -> pure ()
+
+      case Files.fileContentsSheets cont of
+        Just shts -> do
+          putStrLn $ "      Sheets: " ++ show (length shts)
+          putStrLn $ "        (Use --raw-text to view content)"
+        Nothing -> pure ()
+    Nothing -> pure ()
+
+  putStrLn ""
+
+-- | Command to get a file
+getFileCmd :: ApiToken -> ApiVersion -> Text -> Maybe Bool -> Maybe Bool -> Maybe Bool -> Client.ClientM ()
+getFileCmd token version fileId rawText markdown html = do
+  response <- Files.getFile token version fileId rawText markdown html
+  let success = Files.getFileResponseSuccess response
+      file = Files.getFileResponseFile response
+  liftIO $ do
+    putStrLn $ "Success: " ++ show success
+    printFile file
